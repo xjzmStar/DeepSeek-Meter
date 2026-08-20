@@ -18,7 +18,8 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.2.1"
+GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 CONFIG_DIR = Path(os.environ.get("APPDATA", "~")) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "config.json"
 AUTO_START_PATH = Path(os.environ.get("APPDATA", "")) / \
@@ -68,6 +69,103 @@ def save_config(cfg):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+
+# ─── 自动更新 ────────────────────────────────────────────
+def parse_version(v: str):
+    """将版本号字符串转为可比较的元组，如 '2.2.1' -> (2, 2, 1)"""
+    try:
+        parts = v.lstrip("v").split(".")
+        return tuple(int(p) for p in parts)
+    except Exception:
+        return (0, 0, 0)
+
+
+def check_update():
+    """检查 GitHub Releases 是否有新版本，返回 (latest_ver, exe_url, body) 或 None"""
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(url, headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"{APP_NAME}/{APP_VERSION}",
+        })
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        latest_tag = data.get("tag_name", "")
+        latest_ver = parse_version(latest_tag)
+        current_ver = parse_version(APP_VERSION)
+
+        if latest_ver <= current_ver:
+            return None
+
+        # 找 Windows exe 下载链接
+        exe_url = None
+        for asset in data.get("assets", []):
+            name = asset.get("name", "")
+            if name.lower().endswith(".exe"):
+                exe_url = asset.get("browser_download_url")
+                break
+
+        if not exe_url:
+            return None
+
+        body = data.get("body", "") or ""
+        return latest_tag, exe_url, body
+    except Exception:
+        return None
+
+
+def download_and_install(exe_url: str, progress_cb=None):
+    """下载新 exe 到临时位置，写 VBS 脚本替换并重启"""
+    import tempfile
+
+    # 下载到临时文件
+    tmp_dir = Path(tempfile.gettempdir()) / APP_NAME
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_exe = tmp_dir / f"{APP_NAME}-update.exe"
+
+    req = urllib.request.Request(exe_url, headers={
+        "User-Agent": f"{APP_NAME}/{APP_VERSION}",
+    })
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        total = int(resp.headers.get("Content-Length", 0))
+        downloaded = 0
+        with open(tmp_exe, "wb") as f:
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if progress_cb and total > 0:
+                    progress_cb(downloaded, total)
+
+    # 当前 exe 路径
+    if getattr(sys, "frozen", False):
+        current_exe = Path(sys.executable)
+    else:
+        current_exe = Path(__file__).resolve()
+
+    # 写 VBS 脚本：等旧进程退出 → 替换 → 启动 → 删除自身
+    vbs_path = tmp_dir / "updater.vbs"
+    vbs_content = f'''Set fso = CreateObject("Scripting.FileSystemObject")
+WScript.Sleep 2000
+On Error Resume Next
+fso.CopyFile "{tmp_exe}", "{current_exe}", True
+If Err.Number = 0 Then
+    CreateObject("WScript.Shell").Run """{current_exe}"""
+End If
+WScript.Sleep 500
+fso.DeleteFile "{tmp_exe}", True
+fso.DeleteFile WScript.ScriptFullName, True
+'''
+    with open(vbs_path, "w", encoding="gbk") as f:
+        f.write(vbs_content)
+
+    # 启动 VBS 脚本，然后退出当前进程
+    os.startfile(str(vbs_path))
+    sys.exit(0)
 
 
 # ─── API 查询 ────────────────────────────────────────────
@@ -544,6 +642,9 @@ def create_tray_icon(app):
     def on_show(icon, item):
         app.after(0, app._on_show)
 
+    def on_check_update(icon, item):
+        app.after(0, lambda: _do_update_check(app))
+
     def on_settings(icon, item):
         app.after(0, lambda: SettingsWindow(app, app.cfg, app._on_settings_save))
 
@@ -559,11 +660,85 @@ def create_tray_icon(app):
         menu=pystray.Menu(
             pystray.MenuItem("显示", on_show, default=True),
             pystray.MenuItem("设置", on_settings),
+            pystray.MenuItem("检查更新", on_check_update),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出", on_quit),
         )
     )
     return icon
+
+
+# ═══════════════════════════════════════════════════════════
+#  更新对话框
+# ═══════════════════════════════════════════════════════════
+def _do_update_check(app, silent=False):
+    """检查更新，弹出提示或自动下载"""
+    def _worker():
+        result = check_update()
+        app.after(0, lambda: _show_update_result(app, result, silent))
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _show_update_result(app, result, silent):
+    """显示更新检查结果"""
+    if result is None:
+        if not silent:
+            messagebox.showinfo("检查更新", f"当前已是最新版本 ({APP_VERSION})")
+        return
+
+    latest_tag, exe_url, body = result
+    # 截取 changelog 前几行
+    lines = [l for l in body.strip().splitlines() if l.strip()]
+    summary = "\n".join(lines[:10])
+    if len(lines) > 10:
+        summary += "\n..."
+
+    msg = f"发现新版本 {latest_tag}（当前 {APP_VERSION}）\n\n{summary}\n\n是否立即下载更新？"
+    if messagebox.askyesno("发现更新", msg):
+        _show_download_progress(app, exe_url, latest_tag)
+
+
+def _show_download_progress(app, exe_url, version):
+    """显示下载进度条窗口"""
+    win = ctk.CTkToplevel(app)
+    win.title("正在更新")
+    win.geometry("360x150")
+    win.resizable(False, False)
+    win.transient(app)
+    win.grab_set()
+
+    theme = resolve_theme(app.cfg["theme"])
+    bg = THEMES[theme]["bg"]
+    win.configure(fg_color=bg)
+
+    ctk.CTkLabel(win, text=f"正在下载 {version}...",
+                  font=ctk.CTkFont(size=14)).pack(pady=(20, 10))
+
+    progress = ctk.CTkProgressBar(win, width=300)
+    progress.pack(pady=5)
+    progress.set(0)
+
+    status_label = ctk.CTkLabel(win, text="准备下载...",
+                                 font=ctk.CTkFont(size=11))
+    status_label.pack(pady=5)
+
+    def _download():
+        try:
+            def _on_progress(downloaded, total):
+                pct = downloaded / total if total > 0 else 0
+                mb_dl = downloaded / 1048576
+                mb_total = total / 1048576
+                app.after(0, lambda: progress.set(pct))
+                app.after(0, lambda: status_label.configure(
+                    text=f"{mb_dl:.1f} / {mb_total:.1f} MB"))
+
+            download_and_install(exe_url, _on_progress)
+        except Exception as e:
+            app.after(0, lambda: messagebox.showerror("更新失败", str(e)))
+            app.after(0, win.destroy)
+
+    threading.Thread(target=_download, daemon=True).start()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -592,6 +767,9 @@ def main():
     # 首次启动引导
     if not app.cfg["api_key"]:
         app.after(1000, lambda: SettingsWindow(app, app.cfg, on_settings_save))
+
+    # 启动后静默检查更新
+    app.after(3000, lambda: _do_update_check(app, silent=True))
 
     app.mainloop()
 
