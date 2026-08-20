@@ -61,7 +61,7 @@
 2. `cd app && pip install -r requirements.txt`
 3. `python src/app.py`
 
-### 安装（打包 exe）
+### 安装（打包 exe / binary）
 
 ```bash
 # Windows
@@ -71,7 +71,11 @@ build\build_windows.bat
 bash build/build_linux.sh
 ```
 
-生成的 exe 在 `app/dist/DeepSeek-Meter.exe`，双击即可运行。
+生成的文件：
+- Windows: `app/dist/DeepSeek-Meter.exe`
+- Linux: `app/dist/DeepSeek-Meter`
+
+或直接从 [Releases](https://github.com/xjzmStar/DeepSeek-Meter/releases) 页面下载预编译版本。
 
 ### 文件说明
 
@@ -114,11 +118,20 @@ DeepSeek-Meter/
 └── LICENSE
 ```
 
+## 自动构建
+
+每次推送 `v*` tag 时，GitHub Actions 自动构建：
+- **Windows**: `DeepSeek-Meter.exe`
+- **Linux**: `DeepSeek-Meter`
+
+构建产物自动附加到 GitHub Release，无需手动打包。
+
 ## 更新日志
 
 ### v2.0.0 (2026-08-20)
 - 新增独立应用版（CustomTkinter + PyInstaller）
 - 支持明暗主题、窗口置顶、托盘图标、设置面板
+- 新增 Linux 版构建支持（GitHub Actions 自动打包）
 - 仓库结构调整：Rainmeter 版移入 `rainmeter/`，独立版放入 `app/`
 
 ### v1.0.1 (2026-08-20)
