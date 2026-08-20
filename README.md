@@ -2,7 +2,7 @@
 
 一个精美的 Rainmeter 桌面挂件，实时监控 DeepSeek API 余额，支持峰谷电价时段显示。
 
-![DeepSeek-Meter](https://img.shields.io/badge/DeepSeek-Meter-v1.0-blue) ![Rainmeter](https://img.shields.io/badge/Rainmeter-4.5+-purple) ![Python](https://img.shields.io/badge/Python-3.10+-green)
+![DeepSeek-Meter](https://img.shields.io/badge/DeepSeek-Meter-v1.0.1-blue) ![Rainmeter](https://img.shields.io/badge/Rainmeter-4.5+-purple) ![Python](https://img.shields.io/badge/Python-3.10+-green)
 
 ## ✨ 功能特点
 
@@ -128,6 +128,10 @@ py update_state.py
 ```
 
 ## 📋 更新日志
+
+### v1.0.1 (2026-08-20)
+- 📝 修复 README 安装步骤：`git clone` 改为从 Releases 页面下载 zip
+- 📝 更新仓库地址链接
 
 ### v1.0 (2026-08-20)
 - 🎉 初始版本发布
