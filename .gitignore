@@ -25,6 +25,11 @@ Desktop.ini
 *.swp
 *.swo
 
+# PyInstaller build artifacts
+app/build/DeepSeek-Meter/
+app/dist/
+*.spec
+
 # OS
 .DS_Store
 .DS_Store?
