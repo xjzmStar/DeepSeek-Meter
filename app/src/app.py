@@ -209,6 +209,7 @@ class DeepSeekMeter(ctk.CTk):
         self._build_ui()
 
         # ── 启动后台线程 ──
+        self._clock_after_id = None
         self._update_clock()
         self._start_balance_thread()
 
@@ -298,7 +299,7 @@ class DeepSeekMeter(ctk.CTk):
         pv_text, pv_color = get_peak_valley()
         self.pv_label.configure(text=pv_text, text_color=pv_color)
 
-        self.after(1000, self._update_clock)
+        self._clock_after_id = self.after(1000, self._update_clock)
 
     def _toggle_topmost(self):
         """切换窗口置顶状态"""
@@ -381,8 +382,16 @@ class DeepSeekMeter(ctk.CTk):
 
     def _on_close(self):
         self._save_position()
-        self.running = False
-        self.withdraw()  # 隐藏到托盘
+        self.withdraw()  # 隐藏到托盘，不设 running=False
+
+    def _on_show(self):
+        """从托盘恢复显示时重启时钟"""
+        self.deiconify()
+        # 取消旧的定时器再重启，避免重复
+        if self._clock_after_id:
+            self.after_cancel(self._clock_after_id)
+            self._clock_after_id = None
+        self._update_clock()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -533,7 +542,7 @@ def create_tray_icon(app):
         return img
 
     def on_show(icon, item):
-        app.after(0, app.deiconify)
+        app.after(0, app._on_show)
 
     def on_settings(icon, item):
         app.after(0, lambda: SettingsWindow(app, app.cfg, app._on_settings_save))
