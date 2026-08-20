@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 CONFIG_DIR = Path(os.environ.get("APPDATA", "~")) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -248,12 +248,16 @@ def resolve_theme(theme_setting):
 # ─── 开机自启 ────────────────────────────────────────────
 def set_auto_start(enable: bool):
     if enable:
-        exe_path = sys.executable.replace("python.exe", "pythonw.exe")
-        if not os.path.exists(exe_path):
-            exe_path = sys.executable
-        script_dir = Path(__file__).parent.resolve()
+        # PyInstaller onefile 模式：sys.executable 指向临时目录，
+        # 需要用 sys.argv[0] 获取用户实际运行的 exe 路径
+        if getattr(sys, 'frozen', False):
+            exe_path = sys.argv[0]
+        else:
+            exe_path = sys.executable.replace("python.exe", "pythonw.exe")
+            if not os.path.exists(exe_path):
+                exe_path = sys.executable
         vbs_content = f'''Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run """{exe_path}"" ""{script_dir / 'app.py'}""", 0, False'''
+WshShell.Run """{exe_path}""", 0, False'''
         try:
             with open(AUTO_START_PATH, "w", encoding="gbk") as f:
                 f.write(vbs_content)
