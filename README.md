@@ -7,11 +7,11 @@
 | | Rainmeter 版 | 独立应用版 |
 |---|---|---|
 | 依赖 | Rainmeter + Python | 无需额外依赖（单 exe） |
-| 大小 | ~50KB（源码） | ~30MB（打包后） |
+| 大小 | ~50KB | ~17MB |
 | 界面 | Rainmeter 皮肤嵌入桌面 | CustomTkinter 桌面悬浮窗 |
 | 托盘 | 无 | 系统托盘图标 + 右键菜单 |
 | 跨平台 | 仅 Windows | Windows / Linux |
-| 打包 | 无需打包 | PyInstaller 打包为 .exe |
+| 自动更新 | 否 | ✅ 检测 GitHub 新版本自动更新 |
 
 ## 方案一：Rainmeter 版（`rainmeter/`）
 
@@ -48,12 +48,13 @@
 ### 功能
 
 - 桌面悬浮窗：实时时钟 + DeepSeek 余额 + 峰谷时段
-- 系统托盘图标：右键菜单（设置/退出）
+- 系统托盘图标：右键菜单（显示/设置/检查更新/退出）
 - 明暗主题切换（dark / light / 跟随系统）
 - 窗口置顶可选
 - 低余额提醒
 - 开机自启动
 - 拖拽调窗口大小
+- **自动更新**：启动时静默检查 GitHub 新版本，发现新版自动下载替换
 
 ### 安装（直接运行）
 
@@ -81,17 +82,20 @@ bash build/build_linux.sh
 
 | 文件 | 说明 |
 |---|---|
-| `src/app.py` | 主程序（UI + 托盘 + API 查询） |
+| `src/app.py` | 主程序（UI + 托盘 + API 查询 + 自动更新） |
 | `requirements.txt` | Python 依赖 |
 | `build/build_windows.bat` | Windows 打包脚本 |
 | `build/build_linux.sh` | Linux 打包脚本 |
 
-## 技术栈
+## 自动构建
 
-- **前端 UI**: Rainmeter (Lua) / CustomTkinter (Python)
-- **后端**: Python 3.10+ (requests)
-- **打包**: PyInstaller (独立应用版)
-- **启动**: VBScript (Rainmeter 版无窗口后台)
+每次推送 `v*` tag 时，GitHub Actions 自动构建并发布：
+
+- **Windows**: `DeepSeek-Meter.exe`
+- **Linux**: `DeepSeek-Meter`
+- **Rainmeter**: `DeepSeek-Meter-Rainmeter.zip`
+
+构建产物自动附加到 GitHub Release，无需手动打包。
 
 ## 项目结构
 
@@ -114,28 +118,29 @@ DeepSeek-Meter/
 │   │   ├── build_windows.bat
 │   │   └── build_linux.sh
 │   └── requirements.txt
+├── .github/workflows/      # CI 自动构建
+│   └── build.yml
 ├── README.md
 └── LICENSE
 ```
 
-## 自动构建
+## 技术栈
 
-每次推送 `v*` tag 时，GitHub Actions 自动构建：
-- **Windows**: `DeepSeek-Meter.exe`
-- **Linux**: `DeepSeek-Meter`
-
-构建产物自动附加到 GitHub Release，无需手动打包。
+- **前端 UI**: Rainmeter (Lua) / CustomTkinter (Python)
+- **后端**: Python 3.10+
+- **打包**: PyInstaller
+- **启动**: VBScript (Rainmeter 版)
+- **CI**: GitHub Actions
 
 ## 更新日志
 
 ### v2.0.0 (2026-08-20)
 - 新增独立应用版（CustomTkinter + PyInstaller）
-- 支持明暗主题、窗口置顶、托盘图标、设置面板
+- 桌面悬浮窗 + 系统托盘 + 明暗主题 + 窗口置顶
+- 低余额提醒 + 开机自启动 + 拖拽调大小
+- 自动更新：启动时静默检查 GitHub 新版本，自动下载替换
 - 新增 Linux 版构建支持（GitHub Actions 自动打包）
-- 仓库结构调整：Rainmeter 版移入 `rainmeter/`，独立版放入 `app/`
-
-### v1.0.1 (2026-08-20)
-- 修复 README 安装步骤：git clone 改为 Release 下载
+- GitHub Actions CI：tag 推送时自动构建 Windows / Linux / Rainmeter 三个版本
 
 ### v1.0.0 (2026-08-20)
 - 初始发布：Rainmeter 版
