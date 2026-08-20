@@ -13,7 +13,7 @@
   - 谷段 (其余时间): 显示"梁文谷"
 - 🎨 **精美皮肤** - 蓝天白云渐变背景，中文完美支持
 - 🚀 **开机自启** - 后台静默运行，无需手动干预
-- ⚡ **轻量级** - 仅需 Python 运行时，无额外依赖
+- 🪶 **轻量级** - 仅需 Python 运行时，无额外依赖
 
 ## 📦 安装
 
@@ -25,40 +25,30 @@
 
 ### 安装步骤
 
-1. **下载项目**
-   ```bash
-   git clone https://github.com/your-username/DeepSeek-Meter.git
-   ```
+1. **下载**
+   前往 [Releases](https://github.com/xjzmStar/DeepSeekMonitor/releases) 页面，下载最新版本的 zip 压缩包。
 
-2. **复制到 Rainmeter 皮肤目录**
-   ```bash
-   # 将 DeepSeek-Meter 文件夹复制到：
-   # %USERPROFILE%\Documents\Rainmeter\Skins\
+2. **解压到 Rainmeter 皮肤目录**
+   将 zip 中的 `DeepSeek-Meter` 文件夹解压到：
+   ```
+   %USERPROFILE%\Documents\Rainmeter\Skins\
    ```
 
 3. **配置 API Key**
-   ```bash
-   # 复制配置文件模板
-   cd %USERPROFILE%\Documents\Rainmeter\Skins\DeepSeek-Meter\@Resources
-   copy config.example.json config.json
-   
-   # 编辑 config.json，填入你的 DeepSeek API Key
-   notepad config.json
+   打开 `@Resources\config.example.json`，将其另存为 `config.json`，并填入你的 DeepSeek API Key：
+   ```json
+   {
+     "api_key": "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+   }
    ```
 
 4. **启动服务**
-   ```bash
-   # 双击 "启动服务.vbs"
-   # 或按 Win+R，输入：
-   wscript "%USERPROFILE%\Documents\Rainmeter\Skins\DeepSeek-Meter\启动服务.vbs"
-   ```
+   双击 `启动服务.vbs`（服务会随开机自动启动）。
 
 5. **加载皮肤**
-   - 右键点击 Rainmeter 托盘图标
-   - 选择 "刷新全部"
-   - 在 "DeepSeek-Meter" 中勾选 "DeepSeek-Meter"
+   右键点击 Rainmeter 托盘图标 -> 刷新全部 -> 在 "DeepSeek-Meter" 中勾选皮肤。
 
-## 🎮 使用方法
+## 📖 使用方法
 
 ### 日常使用
 
@@ -86,7 +76,7 @@
    rmdir /s /q "%USERPROFILE%\Documents\Rainmeter\Skins\DeepSeek-Meter"
    ```
 
-## 🛠️ 技术栈
+## 🔧 技术栈
 
 - **前端**: Rainmeter (Lua 脚本)
 - **后端**: Python 3.10+ (纯标准库，无第三方依赖)
@@ -116,11 +106,11 @@ DeepSeek-Meter/
 
 ### Q: 余额显示 NO_KEY / YERR
 
-A: 需要配置 API Key，参考 [配置 API Key](#配置-api-key)
+A: 需要配置 API Key，参考 [配置 API Key](#配置-api-key) 步骤。
 
 ### Q: 中文乱码
 
-A: 项目已使用 GBK 编码，确保系统区域设置支持中文
+A: 项目已使用 GBK 编码，确保系统区域设置支持中文。
 
 ### Q: 服务没有自动启动
 
@@ -137,15 +127,15 @@ cd %USERPROFILE%\Documents\Rainmeter\Skins\DeepSeek-Meter\@Resources
 py update_state.py
 ```
 
-## 📝 更新日志
+## 📋 更新日志
 
 ### v1.0 (2026-08-20)
-- ✨ 初始版本发布
+- 🎉 初始版本发布
 - ⏰ 实时时钟显示
 - 💰 DeepSeek 余额监控
 - 🌙 峰谷时段识别
 - 🚀 开机自启动
-- ⚡ 无窗口后台运行
+- 🪶 无窗口后台运行
 
 ## 🤝 贡献
 
