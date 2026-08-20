@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 CONFIG_DIR = Path(os.environ.get("APPDATA", "~")) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -215,12 +215,12 @@ def get_balance_color(balance):
     """余额动态变色"""
     if balance is None:
         return "#FF4444"
-    if balance > 5:
-        return "#00C853"
-    elif balance > 0:
-        return "#FFD600"
-    else:
-        return "#FF4444"
+    threshold = load_config().get("low_balance_threshold", 2.0)
+    if balance <= 0:
+        return "#FF4444"  # 欠费红色
+    if balance <= threshold:
+        return "#FF9800"  # 低余额橙色
+    return "#00C853"  # 充足绿色
 
 
 def get_system_theme():
