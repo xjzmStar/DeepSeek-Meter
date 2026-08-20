@@ -27,7 +27,6 @@ Desktop.ini
 
 # PyInstaller build artifacts
 app/build/DeepSeek-Meter/
-app/dist/
 *.spec
 
 # OS
