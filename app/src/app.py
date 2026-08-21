@@ -376,21 +376,10 @@ class DeepSeekMeter(ctk.CTk):
         colors = self._get_colors()
         self.configure(fg_color=colors["bg"])
 
-        # ── 顶部栏：logo + 图钉按钮 ──
-        top_bar = ctk.CTkFrame(self, fg_color="transparent", height=36)
-        top_bar.pack(fill="x", padx=8, pady=(6, 0))
+        # ── 顶部栏：图钉按钮 ──
+        top_bar = ctk.CTkFrame(self, fg_color="transparent", height=32)
+        top_bar.pack(fill="x", padx=8, pady=(8, 0))
         top_bar.pack_propagate(False)
-
-        # logo
-        try:
-            from PIL import Image, ImageTk
-            logo_path = get_data_path("app_logo.png")
-            img = Image.open(logo_path).resize((28, 28), Image.LANCZOS)
-            self._logo_img = ImageTk.PhotoImage(img)
-            self._logo_label = ctk.CTkLabel(top_bar, image=self._logo_img, text="")
-            self._logo_label.pack(side="left", padx=(2, 6))
-        except Exception:
-            pass
 
         self.pin_state = self.cfg["topmost"]
         pin_color = "#2196F3" if self.pin_state else "#666"
