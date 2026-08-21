@@ -50,18 +50,8 @@ THEMES = {
 }
 
 # ─── 字体 ──────────────────────────────────────────────
-FONT_PRESETS = {
-    "默认": None,  # 使用系统默认
-    "微软雅黑": "Microsoft YaHei",
-    "思源黑体": "Source Han Sans CN",
-    "等线": "DengXian",
-    "楷体": "KaiTi",
-    "宋体": "SimSun",
-    "黑体": "SimHei",
-    "Consolas": "Consolas",
-    "Cascadia Code": "Cascadia Code",
-    "JetBrains Mono": "JetBrains Mono",
-}
+FONT_PRESETS = ["默认", "微软雅黑", "思源黑体", "等线", "楷体", "宋体", "黑体", "Consolas", "Cascadia Code"]
+FONT_SIZES = ["8", "9", "10", "11", "12", "14", "16", "18", "20", "22", "24", "26", "28", "36", "48", "72"]
 
 BASE_FONT_SIZES = {
     "time": 36,
@@ -72,15 +62,16 @@ BASE_FONT_SIZES = {
 
 
 def get_font_family(preset_name):
-    """根据预设名返回实际字体族名"""
-    return FONT_PRESETS.get(preset_name, None)
+    """根据字体名返回实际字体族名，空字符串=系统默认"""
+    if not preset_name or preset_name == "默认":
+        return None
+    return preset_name
 
 
-def make_font(preset_name, scale, size_key):
-    """创建缩放后的字体"""
+def make_font(preset_name, pt_size, size_key):
+    """创建指定字号的字体"""
     family = get_font_family(preset_name)
-    base_size = BASE_FONT_SIZES.get(size_key, 14)
-    size = max(8, int(base_size * scale))
+    size = max(8, pt_size)
     if family:
         return ctk.CTkFont(family=family, size=size)
     return ctk.CTkFont(size=size)
@@ -99,7 +90,7 @@ DEFAULT_CONFIG = {
     "window_w": 280,
     "window_h": 160,
     "font_family": "默认",
-    "font_scale": 1.0,
+    "font_size": 14,  # 字号（pt）
 }
 
 
@@ -416,7 +407,7 @@ class DeepSeekMeter(ctk.CTk):
         self.configure(fg_color=colors["bg"])
 
         font_preset = self.cfg.get("font_family", "默认")
-        font_scale = self.cfg.get("font_scale", 1.0)
+        font_size = self.cfg.get("font_size", 1.0)
 
         # ── 顶部栏：图钉按钮 ──
         top_bar = ctk.CTkFrame(self, fg_color="transparent", height=32)
@@ -441,7 +432,7 @@ class DeepSeekMeter(ctk.CTk):
         # 时间
         self.time_label = ctk.CTkLabel(
             self.container, text="00:00:00",
-            font=make_font(font_preset, font_scale, "time"),
+            font=make_font(font_preset, font_size, "time"),
             text_color=colors["time"]
         )
         self.time_label.pack(pady=(4, 0), expand=True)
@@ -453,14 +444,14 @@ class DeepSeekMeter(ctk.CTk):
         pv_text, pv_color = get_peak_valley()
         self.pv_label = ctk.CTkLabel(
             self.info_frame, text=pv_text,
-            font=make_font(font_preset, font_scale, "peak_valley"),
+            font=make_font(font_preset, font_size, "peak_valley"),
             text_color=pv_color
         )
         self.pv_label.pack(side="left", padx=(0, 12))
 
         self.balance_label = ctk.CTkLabel(
             self.info_frame, text="¥--",
-            font=make_font(font_preset, font_scale, "balance"),
+            font=make_font(font_preset, font_size, "balance"),
             text_color="#00C853"
         )
         self.balance_label.pack(side="left")
@@ -468,7 +459,7 @@ class DeepSeekMeter(ctk.CTk):
         # 日期
         self.date_label = ctk.CTkLabel(
             self.container, text="",
-            font=make_font(font_preset, font_scale, "date"),
+            font=make_font(font_preset, font_size, "date"),
             text_color=colors["date"]
         )
         self.date_label.pack(pady=(6, 0), expand=True)
@@ -486,11 +477,11 @@ class DeepSeekMeter(ctk.CTk):
     def _refresh_fonts(self):
         """刷新字体样式和大小"""
         font_preset = self.cfg.get("font_family", "默认")
-        font_scale = self.cfg.get("font_scale", 1.0)
-        self.time_label.configure(font=make_font(font_preset, font_scale, "time"))
-        self.balance_label.configure(font=make_font(font_preset, font_scale, "balance"))
-        self.pv_label.configure(font=make_font(font_preset, font_scale, "peak_valley"))
-        self.date_label.configure(font=make_font(font_preset, font_scale, "date"))
+        font_size = self.cfg.get("font_size", 14)
+        self.time_label.configure(font=make_font(font_preset, font_size, "time"))
+        self.balance_label.configure(font=make_font(font_preset, font_size, "balance"))
+        self.pv_label.configure(font=make_font(font_preset, font_size, "peak_valley"))
+        self.date_label.configure(font=make_font(font_preset, font_size, "date"))
 
     def _update_clock(self):
         """每秒更新时钟"""
@@ -601,6 +592,92 @@ class DeepSeekMeter(ctk.CTk):
 
 
 # ═══════════════════════════════════════════════════════════
+#  字体选择弹窗（虚拟滚动，按需渲染）
+# ═══════════════════════════════════════════════════════════
+class FontPickerWindow(ctk.CTkToplevel):
+    def __init__(self, parent, current_font, on_select):
+        super().__init__(parent)
+        self.on_select = on_select
+        self.current_font = current_font
+
+        theme = resolve_theme(parent.cfg["theme"])
+        bg = THEMES[theme]["bg"]
+        card_bg = "#252540" if theme == "dark" else "#e0e0e0"
+        btn_hover = "#3a3a5c" if theme == "dark" else "#b0b0b0"
+        btn_fg = "#2a2a4a" if theme == "dark" else "#c8c8c8"
+        self._card_bg = card_bg
+        self._btn_hover = btn_hover
+        self._btn_fg = btn_fg
+        self._theme = theme
+
+        self.title("选择字体")
+        self.geometry("300x420")
+        self.configure(fg_color=bg)
+        self.transient(parent)
+        self.grab_set()
+
+        # 搜索框
+        search_frame = ctk.CTkFrame(self, fg_color="transparent")
+        search_frame.pack(fill="x", padx=12, pady=(12, 8))
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", self._on_search)
+        ctk.CTkEntry(search_frame, textvariable=self.search_var,
+                      placeholder_text="搜索字体...", height=32).pack(fill="x")
+
+        # 滚动容器
+        list_frame = ctk.CTkFrame(self, fg_color=card_bg)
+        list_frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        self.font_list = ctk.CTkScrollableFrame(list_frame, fg_color="transparent",
+                                                  scrollbar_fg_color=card_bg)
+        self.font_list.pack(fill="both", expand=True)
+
+        # 全量字体数据（9种预设）
+        self.all_fonts = FONT_PRESETS
+        self.filtered = self.all_fonts[:]
+        self.buttons = {}
+        self._selected_btn = None
+        self._render_page()
+
+    def _make_btn(self, fname):
+        """创建一个字体按钮"""
+        is_sel = (fname == self.current_font)
+        text_color = "#fff" if is_sel else "#222"
+        if self._theme == "dark":
+            text_color = "#fff" if is_sel else "#e8e8e8"
+        return ctk.CTkButton(
+            self.font_list, text=fname, height=34, anchor="w",
+            fg_color="#2196F3" if is_sel else self._btn_fg,
+            hover_color=self._btn_hover,
+            text_color=text_color,
+            font=ctk.CTkFont(size=12),
+            command=lambda f=fname: self._pick(f)
+        )
+
+    def _render_page(self, search=""):
+        """渲染字体按钮列表"""
+        for w in self.font_list.winfo_children():
+            w.destroy()
+        self.buttons.clear()
+        self._selected_btn = None
+
+        for fname in self.filtered:
+            btn = self._make_btn(fname)
+            btn.pack(fill="x", padx=4, pady=3)
+            self.buttons[fname] = btn
+            if fname == self.current_font:
+                self._selected_btn = btn
+
+    def _on_search(self, *args):
+        keyword = self.search_var.get().lower()
+        self.filtered = [f for f in self.all_fonts if keyword in f.lower()]
+        self._render_page(keyword)
+
+    def _pick(self, fname):
+        self.on_select(fname)
+        self.destroy()
+
+
+# ═══════════════════════════════════════════════════════════
 #  设置窗口
 # ═══════════════════════════════════════════════════════════
 class SettingsWindow(ctk.CTkToplevel):
@@ -614,17 +691,23 @@ class SettingsWindow(ctk.CTkToplevel):
         theme = resolve_theme(self.cfg["theme"])
         bg = THEMES[theme]["bg"]
         card_bg = "#252540" if theme == "dark" else "#e0e0e0"
+        time_color = THEMES[theme]["time"]
         self._card_bg = card_bg
 
         self.title("设置")
-        self.geometry("380x460")
+        self.geometry("380x520")
         self.resizable(False, False)
         self.configure(fg_color=bg)
         self.transient(parent)
         self.grab_set()
 
+        # ── 滚动容器 ──
+        self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent",
+                                               scrollbar_fg_color=bg)
+        self._scroll.pack(fill="both", expand=True, padx=2, pady=(2, 0))
+
         # ── 外观设置 ──
-        appearance_frame = ctk.CTkFrame(self, fg_color=card_bg)
+        appearance_frame = ctk.CTkFrame(self._scroll, fg_color=card_bg)
         appearance_frame.pack(fill="x", padx=20, pady=(15, 5))
 
         ctk.CTkLabel(appearance_frame, text="外观",
@@ -654,54 +737,51 @@ class SettingsWindow(ctk.CTkToplevel):
         ).pack(anchor="w", padx=12, pady=(0, 8))
 
         # ── 字体设置 ──
-        font_frame = ctk.CTkFrame(self, fg_color=card_bg)
+        font_frame = ctk.CTkFrame(self._scroll, fg_color=card_bg)
         font_frame.pack(fill="x", padx=20, pady=5)
 
         ctk.CTkLabel(font_frame, text="字体",
                       font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=12, pady=(8, 4))
 
-        # 字体样式
+        # 字体样式 - 点击打开字体选择弹窗
         style_row = ctk.CTkFrame(font_frame, fg_color="transparent")
-        style_row.pack(fill="x", padx=12, pady=(0, 4))
+        style_row.pack(fill="x", padx=12, pady=(0, 8))
         ctk.CTkLabel(style_row, text="字体样式",
                       font=ctk.CTkFont(size=12)).pack(side="left")
-        self.font_var = tk.StringVar(value=self.cfg.get("font_family", "默认"))
-        self.font_menu = ctk.CTkOptionMenu(
-            style_row,
-            variable=self.font_var,
-            values=list(FONT_PRESETS.keys()),
-            width=140
-        )
-        self.font_menu.pack(side="right")
 
-        # 字体大小
+        self.font_var = tk.StringVar(value=self.cfg.get("font_family", "默认"))
+        self.font_btn = ctk.CTkButton(
+            style_row, text=self.font_var.get(), width=160, height=32,
+            anchor="w", font=ctk.CTkFont(size=12),
+            command=self._open_font_picker
+        )
+        self.font_btn.pack(side="right")
+
+        # 字体大小 - 下拉菜单
         size_row = ctk.CTkFrame(font_frame, fg_color="transparent")
         size_row.pack(fill="x", padx=12, pady=(0, 8))
         ctk.CTkLabel(size_row, text="字体大小",
                       font=ctk.CTkFont(size=12)).pack(side="left")
-        self.font_scale_var = tk.DoubleVar(value=self.cfg.get("font_scale", 1.0))
-        self.font_scale_slider = ctk.CTkSlider(
-            size_row, from_=0.6, to=1.8, number_of_steps=12,
-            variable=self.font_scale_var, width=140,
-            command=self._on_font_scale_change
+        self.font_size_var = tk.StringVar(value=str(self.cfg.get("font_size", 14)))
+        self.font_size_menu = ctk.CTkOptionMenu(
+            size_row,
+            variable=self.font_size_var,
+            values=FONT_SIZES,
+            width=80,
+            command=lambda _: self._on_font_size_change()
         )
-        self.font_scale_slider.pack(side="right")
-        self.font_scale_label = ctk.CTkLabel(
-            size_row, text=f"{self.cfg.get('font_scale', 1.0):.1f}x",
-            font=ctk.CTkFont(size=11), width=36
-        )
-        self.font_scale_label.pack(side="right", padx=(0, 6))
+        self.font_size_menu.pack(side="right")
 
         # 字体预览
         self.font_preview = ctk.CTkLabel(
             font_frame, text="预览：11:59:59 ¥88.88",
             font=ctk.CTkFont(size=13),
-            text_color=colors["time"]
+            text_color=time_color
         )
         self.font_preview.pack(padx=12, pady=(0, 8))
 
         # ── 功能设置 ──
-        func_frame = ctk.CTkFrame(self, fg_color=card_bg)
+        func_frame = ctk.CTkFrame(self._scroll, fg_color=card_bg)
         func_frame.pack(fill="x", padx=20, pady=5)
 
         ctk.CTkLabel(func_frame, text="功能",
@@ -727,7 +807,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.threshold_entry.insert(0, str(self.cfg["low_balance_threshold"]))
 
         # ── API Key ──
-        api_frame = ctk.CTkFrame(self, fg_color=card_bg)
+        api_frame = ctk.CTkFrame(self._scroll, fg_color=card_bg)
         api_frame.pack(fill="x", padx=20, pady=5)
 
         ctk.CTkLabel(api_frame, text="API Key",
@@ -744,7 +824,7 @@ class SettingsWindow(ctk.CTkToplevel):
                          command=self._toggle_show).pack(anchor="w", padx=12, pady=(0, 8))
 
         # ── 按钮 ──
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame = ctk.CTkFrame(self._scroll, fg_color="transparent")
         btn_frame.pack(pady=(12, 15))
         ctk.CTkButton(btn_frame, text="确认", width=140, height=36,
                        font=ctk.CTkFont(size=14),
@@ -757,18 +837,25 @@ class SettingsWindow(ctk.CTkToplevel):
     def _toggle_show(self):
         self.api_entry.configure(show="" if self.show_var.get() else "*")
 
-    def _on_font_scale_change(self, value):
-        """字体大小滑块变化时更新预览"""
-        scale = round(value, 1)
-        self.font_scale_label.configure(text=f"{scale:.1f}x")
-        # 更新预览字体
+    def _open_font_picker(self):
+        """打开字体选择弹窗"""
+        FontPickerWindow(self, self.font_var.get(), self._on_font_picked)
+
+    def _on_font_picked(self, fname):
+        """字体选择回调"""
+        self.font_var.set(fname)
+        self.font_btn.configure(text=fname)
+        self._on_font_size_change(self.font_size_var.get())
+
+    def _on_font_size_change(self, _=None):
+        """字体大小下拉变化时更新预览"""
+        pt = int(self.font_size_var.get())
         preset = self.font_var.get()
         family = get_font_family(preset)
-        size = max(8, int(13 * scale))
         if family:
-            self.font_preview.configure(font=ctk.CTkFont(family=family, size=size))
+            self.font_preview.configure(font=ctk.CTkFont(family=family, size=pt))
         else:
-            self.font_preview.configure(font=ctk.CTkFont(size=size))
+            self.font_preview.configure(font=ctk.CTkFont(size=pt))
 
     def _confirm(self):
         """确认：应用所有设置并保存"""
@@ -778,7 +865,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self.cfg["topmost"] = self.topmost_var.get()
         self.cfg["theme"] = self.theme_var.get()
         self.cfg["font_family"] = self.font_var.get()
-        self.cfg["font_scale"] = round(self.font_scale_var.get(), 1)
+        self.cfg["font_size"] = int(self.font_size_var.get())
         try:
             self.cfg["low_balance_threshold"] = float(self.threshold_entry.get())
         except ValueError:
