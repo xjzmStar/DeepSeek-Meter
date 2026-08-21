@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.2"
+APP_VERSION = "2.0.3"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 CONFIG_DIR = Path(os.environ.get("APPDATA", "~")) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -141,9 +141,9 @@ def download_and_install(exe_url: str, progress_cb=None):
                 if progress_cb and total > 0:
                     progress_cb(downloaded, total)
 
-    # 当前 exe 路径
+    # 当前 exe 路径（PyInstaller onefile模式下 sys.executable 指向临时目录，用 sys.argv[0]）
     if getattr(sys, "frozen", False):
-        current_exe = Path(sys.executable)
+        current_exe = Path(sys.argv[0]).resolve()
     else:
         current_exe = Path(__file__).resolve()
 
