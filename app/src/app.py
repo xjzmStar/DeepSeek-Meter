@@ -18,8 +18,18 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.3"
+APP_VERSION = "2.0.4"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
+
+
+def get_data_path(filename):
+    """获取数据文件路径，兼容PyInstaller onefile模式"""
+    if getattr(sys, "frozen", False):
+        # PyInstaller onefile: _MEIPASS 是临时解压目录
+        base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, filename)
 CONFIG_DIR = Path(os.environ.get("APPDATA", "~")) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "config.json"
 AUTO_START_PATH = Path(os.environ.get("APPDATA", "")) / \
