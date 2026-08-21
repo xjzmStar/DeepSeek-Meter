@@ -350,6 +350,9 @@ class DeepSeekMeter(ctk.CTk):
         self.minsize(220, 120)
         self.attributes("-topmost", self.cfg["topmost"])
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._settings_win = None  # 跟踪设置窗口
+        self._opening_settings = False  # 防止 _on_map 重复显示
+        self.bind("<Map>", self._on_map)  # 任务栏恢复时触发
 
         # ── 窗口图标 ──
         try:
@@ -580,6 +583,23 @@ class DeepSeekMeter(ctk.CTk):
         self.cfg["window_h"] = self.winfo_height()
         save_config(self.cfg)
 
+    def _on_map(self, event=None):
+        """窗口从隐藏恢复时，同步显示设置窗口"""
+        if self._opening_settings:
+            return
+        if self._settings_win and self._settings_win.winfo_exists():
+            self._settings_win.deiconify()
+            self._settings_win.lift()
+
+    def _on_taskbar_click(self, event=None):
+        """任务栏点击时显示主窗口+设置窗口"""
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        if self._settings_win and self._settings_win.winfo_exists():
+            self._settings_win.deiconify()
+            self._settings_win.lift()
+
     def _on_close(self):
         self._save_position()
         self.withdraw()  # 隐藏到托盘，不设 running=False
@@ -685,10 +705,12 @@ class FontPickerWindow(ctk.CTkToplevel):
 # ═══════════════════════════════════════════════════════════
 class SettingsWindow(ctk.CTkToplevel):
     def __init__(self, parent, cfg, on_save):
-        super().__init__(parent)
+        super().__init__()
+        self.withdraw()  # 先隐藏，布局完再显示，防止闪烁
         self.original_cfg = cfg.copy()  # 保存原始配置，用于取消时恢复
         self.cfg = cfg.copy()
         self.on_save = on_save
+        self._parent = parent
 
         # 获取当前主题颜色
         theme = resolve_theme(self.cfg["theme"])
@@ -701,8 +723,21 @@ class SettingsWindow(ctk.CTkToplevel):
         self.geometry("380x520")
         self.resizable(False, False)
         self.configure(fg_color=bg)
-        self.transient(parent)
-        self.grab_set()
+
+        # 设置窗口图标
+        try:
+            ico_path = get_data_path("app.ico")
+            if os.path.exists(ico_path):
+                self.iconbitmap(ico_path)
+            else:
+                from PIL import Image, ImageTk
+                logo_path = get_data_path("app_logo.png")
+                if os.path.exists(logo_path):
+                    img = Image.open(logo_path).resize((32, 32), Image.LANCZOS)
+                    self._icon_ref = ImageTk.PhotoImage(img)
+                    self.iconphoto(True, self._icon_ref)
+        except Exception:
+            pass
 
         # ── 滚动容器 ──
         self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent",
@@ -837,6 +872,10 @@ class SettingsWindow(ctk.CTkToplevel):
                        fg_color="#555", hover_color="#666",
                        command=self._cancel).pack(side="left", padx=10)
 
+        # 布局完成后再显示，防止闪烁
+        self.update_idletasks()
+        self.deiconify()
+
     def _toggle_show(self):
         self.api_entry.configure(show="" if self.show_var.get() else "*")
 
@@ -877,12 +916,20 @@ class SettingsWindow(ctk.CTkToplevel):
         save_config(self.cfg)
         set_auto_start(self.cfg["auto_start"])
         self.on_save(self.cfg)
+        self._clear_ref()
         self.destroy()
 
     def _cancel(self):
         """取消：恢复原始设置"""
         self.on_save(self.original_cfg)
+        self._clear_ref()
         self.destroy()
+
+    def _clear_ref(self):
+        """清除父窗口中的设置窗口引用"""
+        parent = getattr(self, '_parent', None)
+        if parent and hasattr(parent, '_settings_win'):
+            parent._settings_win = None
 
 
 # ═══════════════════════════════════════════════════════════
@@ -912,7 +959,17 @@ def create_tray_icon(app):
         app.after(0, lambda: _do_update_check(app))
 
     def on_settings(icon, item):
-        app.after(0, lambda: SettingsWindow(app, app.cfg, app._on_settings_save))
+        def open_settings():
+            if app._opening_settings:
+                return
+            if app._settings_win and app._settings_win.winfo_exists():
+                app._settings_win.lift()
+                app._settings_win.focus_force()
+                return
+            app._opening_settings = True
+            app._settings_win = SettingsWindow(app, app.cfg, app._on_settings_save)
+            app._opening_settings = False
+        app.after(0, open_settings)
 
     def on_quit(icon, item):
         app.running = False
@@ -1032,7 +1089,9 @@ def main():
 
     # 首次启动引导
     if not app.cfg["api_key"]:
-        app.after(1000, lambda: SettingsWindow(app, app.cfg, on_settings_save))
+        def open_first_settings():
+            app._settings_win = SettingsWindow(app, app.cfg, on_settings_save)
+        app.after(1000, open_first_settings)
 
     # 启动后静默检查更新
     app.after(3000, lambda: _do_update_check(app, silent=True))
