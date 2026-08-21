@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.7"
+APP_VERSION = "2.0.8"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -350,6 +350,17 @@ class DeepSeekMeter(ctk.CTk):
             from PIL import ImageTk
         except ImportError:
             ImageTk = None
+
+        # 优先用 ico 文件设置标题栏/任务栏图标
+        ico_path = get_data_path("app.ico")
+        if os.path.exists(ico_path):
+            try:
+                self.iconbitmap(ico_path)
+                return
+            except Exception:
+                pass
+
+        # fallback: 用 PNG 缩放后 iconphoto
         logo_path = get_data_path("app_logo.png")
         if os.path.exists(logo_path) and ImageTk:
             img = Image.open(logo_path).resize((32, 32), Image.LANCZOS)
