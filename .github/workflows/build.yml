@@ -22,7 +22,7 @@ jobs:
       - name: Build exe
         run: |
           cd app
-          pyinstaller --onefile --windowed --icon=src/app.ico --name DeepSeek-Meter src/app.py
+          pyinstaller --onefile --windowed --icon=src/app.ico --add-data "src/app.ico;." --add-data "src/app_logo.png;." --name DeepSeek-Meter src/app.py
       - uses: actions/upload-artifact@v4
         with:
           name: DeepSeek-Meter-Windows
