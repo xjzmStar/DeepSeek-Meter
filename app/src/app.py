@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.6"
+APP_VERSION = "2.0.7"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -344,12 +344,17 @@ class DeepSeekMeter(ctk.CTk):
 
     def _set_window_icon(self):
         """设置窗口图标（标题栏 + 任务栏）"""
+        from PIL import Image
         import tkinter as _tk
+        try:
+            from PIL import ImageTk
+        except ImportError:
+            ImageTk = None
         logo_path = get_data_path("app_logo.png")
-        if os.path.exists(logo_path):
-            img = _tk.PhotoImage(file=logo_path)
-            self.iconphoto(True, img)
-            self._window_icon_ref = img  # 防止GC回收
+        if os.path.exists(logo_path) and ImageTk:
+            img = Image.open(logo_path).resize((32, 32), Image.LANCZOS)
+            self._window_icon_ref = ImageTk.PhotoImage(img)
+            self.iconphoto(True, self._window_icon_ref)
 
     def _get_colors(self):
         """获取当前主题配色"""
@@ -367,10 +372,10 @@ class DeepSeekMeter(ctk.CTk):
 
         # logo
         try:
-            import tkinter as _tk
+            from PIL import Image, ImageTk
             logo_path = get_data_path("app_logo.png")
-            self._logo_img = _tk.PhotoImage(file=logo_path)
-            # 缩放到 28x28
+            img = Image.open(logo_path).resize((28, 28), Image.LANCZOS)
+            self._logo_img = ImageTk.PhotoImage(img)
             self._logo_label = ctk.CTkLabel(top_bar, image=self._logo_img, text="")
             self._logo_label.pack(side="left", padx=(2, 6))
         except Exception:
