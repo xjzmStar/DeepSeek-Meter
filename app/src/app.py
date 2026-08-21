@@ -53,12 +53,14 @@ THEMES = {
 FONT_PRESETS = ["默认", "微软雅黑", "思源黑体", "等线", "楷体", "宋体", "黑体", "Consolas", "Cascadia Code"]
 FONT_SIZES = ["8", "9", "10", "11", "12", "14", "16", "18", "20", "22", "24", "26", "28", "36", "48", "72"]
 
-BASE_FONT_SIZES = {
+# 基准字号 12pt 时各元素的实际大小
+FONT_BASE = {
     "time": 36,
     "balance": 22,
     "peak_valley": 18,
     "date": 11,
 }
+FONT_REF_SIZE = 12  # 基准字号
 
 
 def get_font_family(preset_name):
@@ -68,10 +70,11 @@ def get_font_family(preset_name):
     return preset_name
 
 
-def make_font(preset_name, pt_size, size_key):
-    """创建指定字号的字体"""
+def make_font(preset_name, ref_pt, size_key):
+    """创建按比例缩放的字体（ref_pt=基准字号，各元素按比例放大）"""
     family = get_font_family(preset_name)
-    size = max(8, pt_size)
+    base = FONT_BASE.get(size_key, 14)
+    size = max(8, round(base * ref_pt / FONT_REF_SIZE))
     if family:
         return ctk.CTkFont(family=family, size=size)
     return ctk.CTkFont(size=size)
@@ -845,17 +848,18 @@ class SettingsWindow(ctk.CTkToplevel):
         """字体选择回调"""
         self.font_var.set(fname)
         self.font_btn.configure(text=fname)
-        self._on_font_size_change(self.font_size_var.get())
+        self._on_font_size_change()
 
     def _on_font_size_change(self, _=None):
         """字体大小下拉变化时更新预览"""
-        pt = int(self.font_size_var.get())
+        ref_pt = int(self.font_size_var.get())
         preset = self.font_var.get()
         family = get_font_family(preset)
+        size = max(8, round(13 * ref_pt / FONT_REF_SIZE))
         if family:
-            self.font_preview.configure(font=ctk.CTkFont(family=family, size=pt))
+            self.font_preview.configure(font=ctk.CTkFont(family=family, size=size))
         else:
-            self.font_preview.configure(font=ctk.CTkFont(size=pt))
+            self.font_preview.configure(font=ctk.CTkFont(size=size))
 
     def _confirm(self):
         """确认：应用所有设置并保存"""
