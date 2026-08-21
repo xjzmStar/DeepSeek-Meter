@@ -637,6 +637,11 @@ def create_tray_icon(app):
     from PIL import Image, ImageDraw
 
     def make_icon():
+        # 优先加载app_logo.png，fallback到绘制
+        logo_path = get_data_path("app_logo.png")
+        if os.path.exists(logo_path):
+            return Image.open(logo_path).resize((64, 64), Image.LANCZOS)
+        # fallback: 绘制蓝色圆形+白色D
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         draw.ellipse([8, 8, 56, 56], fill="#2196F3", outline="#FFFFFF", width=2)
