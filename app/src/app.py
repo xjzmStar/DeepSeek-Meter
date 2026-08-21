@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.5"
+APP_VERSION = "2.0.6"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -157,16 +157,24 @@ def download_and_install(exe_url: str, progress_cb=None):
     else:
         current_exe = Path(__file__).resolve()
 
-    # 写 VBS 脚本：等旧进程退出 → 替换 → 启动 → 删除自身
+    # 写 VBS 脚本：循环等旧进程退出 → 替换 → 启动 → 删除自身
     vbs_path = tmp_dir / "updater.vbs"
     vbs_content = f'''Set fso = CreateObject("Scripting.FileSystemObject")
-WScript.Sleep 2000
+Set shell = CreateObject("WScript.Shell")
+' 循环等待旧进程退出（最多60秒）
+For i = 1 To 60
+    WScript.Sleep 1000
+    Set proc = shell.Exec("cmd /c tasklist /fi \\"IMAGENAME eq {current_exe.name}\\" /fo csv /nh")
+    output = proc.StdOut.ReadAll
+    If InStr(output, "{current_exe.name}") = 0 Then Exit For
+Next
+WScript.Sleep 1000
 On Error Resume Next
 fso.CopyFile "{tmp_exe}", "{current_exe}", True
 If Err.Number = 0 Then
-    CreateObject("WScript.Shell").Run """{current_exe}"""
+    shell.Run """{current_exe}""", 0, False
 End If
-WScript.Sleep 500
+WScript.Sleep 2000
 fso.DeleteFile "{tmp_exe}", True
 fso.DeleteFile WScript.ScriptFullName, True
 '''
@@ -175,7 +183,10 @@ fso.DeleteFile WScript.ScriptFullName, True
 
     # 启动 VBS 脚本，然后退出当前进程
     os.startfile(str(vbs_path))
-    sys.exit(0)
+    try:
+        sys.exit(0)
+    except Exception:
+        os._exit(0)
 
 
 # ─── API 查询 ────────────────────────────────────────────
