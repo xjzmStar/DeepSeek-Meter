@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.8"
+APP_VERSION = "2.1.0"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -49,6 +49,43 @@ THEMES = {
     },
 }
 
+# ─── 字体 ──────────────────────────────────────────────
+FONT_PRESETS = {
+    "默认": None,  # 使用系统默认
+    "微软雅黑": "Microsoft YaHei",
+    "思源黑体": "Source Han Sans CN",
+    "等线": "DengXian",
+    "楷体": "KaiTi",
+    "宋体": "SimSun",
+    "黑体": "SimHei",
+    "Consolas": "Consolas",
+    "Cascadia Code": "Cascadia Code",
+    "JetBrains Mono": "JetBrains Mono",
+}
+
+BASE_FONT_SIZES = {
+    "time": 36,
+    "balance": 22,
+    "peak_valley": 18,
+    "date": 11,
+}
+
+
+def get_font_family(preset_name):
+    """根据预设名返回实际字体族名"""
+    return FONT_PRESETS.get(preset_name, None)
+
+
+def make_font(preset_name, scale, size_key):
+    """创建缩放后的字体"""
+    family = get_font_family(preset_name)
+    base_size = BASE_FONT_SIZES.get(size_key, 14)
+    size = max(8, int(base_size * scale))
+    if family:
+        return ctk.CTkFont(family=family, size=size)
+    return ctk.CTkFont(size=size)
+
+
 # ─── 配置管理 ────────────────────────────────────────────
 DEFAULT_CONFIG = {
     "api_key": "",
@@ -61,6 +98,8 @@ DEFAULT_CONFIG = {
     "window_y": None,
     "window_w": 280,
     "window_h": 160,
+    "font_family": "默认",
+    "font_scale": 1.0,
 }
 
 
@@ -376,6 +415,9 @@ class DeepSeekMeter(ctk.CTk):
         colors = self._get_colors()
         self.configure(fg_color=colors["bg"])
 
+        font_preset = self.cfg.get("font_family", "默认")
+        font_scale = self.cfg.get("font_scale", 1.0)
+
         # ── 顶部栏：图钉按钮 ──
         top_bar = ctk.CTkFrame(self, fg_color="transparent", height=32)
         top_bar.pack(fill="x", padx=8, pady=(8, 0))
@@ -399,7 +441,7 @@ class DeepSeekMeter(ctk.CTk):
         # 时间
         self.time_label = ctk.CTkLabel(
             self.container, text="00:00:00",
-            font=ctk.CTkFont(size=36, weight="bold"),
+            font=make_font(font_preset, font_scale, "time"),
             text_color=colors["time"]
         )
         self.time_label.pack(pady=(4, 0), expand=True)
@@ -411,14 +453,14 @@ class DeepSeekMeter(ctk.CTk):
         pv_text, pv_color = get_peak_valley()
         self.pv_label = ctk.CTkLabel(
             self.info_frame, text=pv_text,
-            font=ctk.CTkFont(size=18),
+            font=make_font(font_preset, font_scale, "peak_valley"),
             text_color=pv_color
         )
         self.pv_label.pack(side="left", padx=(0, 12))
 
         self.balance_label = ctk.CTkLabel(
             self.info_frame, text="¥--",
-            font=ctk.CTkFont(size=22, weight="bold"),
+            font=make_font(font_preset, font_scale, "balance"),
             text_color="#00C853"
         )
         self.balance_label.pack(side="left")
@@ -426,7 +468,7 @@ class DeepSeekMeter(ctk.CTk):
         # 日期
         self.date_label = ctk.CTkLabel(
             self.container, text="",
-            font=ctk.CTkFont(size=11),
+            font=make_font(font_preset, font_scale, "date"),
             text_color=colors["date"]
         )
         self.date_label.pack(pady=(6, 0), expand=True)
@@ -439,6 +481,16 @@ class DeepSeekMeter(ctk.CTk):
         self.configure(fg_color=colors["bg"])
         self.time_label.configure(text_color=colors["time"])
         self.date_label.configure(text_color=colors["date"])
+        self._refresh_fonts()
+
+    def _refresh_fonts(self):
+        """刷新字体样式和大小"""
+        font_preset = self.cfg.get("font_family", "默认")
+        font_scale = self.cfg.get("font_scale", 1.0)
+        self.time_label.configure(font=make_font(font_preset, font_scale, "time"))
+        self.balance_label.configure(font=make_font(font_preset, font_scale, "balance"))
+        self.pv_label.configure(font=make_font(font_preset, font_scale, "peak_valley"))
+        self.date_label.configure(font=make_font(font_preset, font_scale, "date"))
 
     def _update_clock(self):
         """每秒更新时钟"""
@@ -601,6 +653,53 @@ class SettingsWindow(ctk.CTkToplevel):
             variable=self.topmost_var
         ).pack(anchor="w", padx=12, pady=(0, 8))
 
+        # ── 字体设置 ──
+        font_frame = ctk.CTkFrame(self, fg_color=card_bg)
+        font_frame.pack(fill="x", padx=20, pady=5)
+
+        ctk.CTkLabel(font_frame, text="字体",
+                      font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=12, pady=(8, 4))
+
+        # 字体样式
+        style_row = ctk.CTkFrame(font_frame, fg_color="transparent")
+        style_row.pack(fill="x", padx=12, pady=(0, 4))
+        ctk.CTkLabel(style_row, text="字体样式",
+                      font=ctk.CTkFont(size=12)).pack(side="left")
+        self.font_var = tk.StringVar(value=self.cfg.get("font_family", "默认"))
+        self.font_menu = ctk.CTkOptionMenu(
+            style_row,
+            variable=self.font_var,
+            values=list(FONT_PRESETS.keys()),
+            width=140
+        )
+        self.font_menu.pack(side="right")
+
+        # 字体大小
+        size_row = ctk.CTkFrame(font_frame, fg_color="transparent")
+        size_row.pack(fill="x", padx=12, pady=(0, 8))
+        ctk.CTkLabel(size_row, text="字体大小",
+                      font=ctk.CTkFont(size=12)).pack(side="left")
+        self.font_scale_var = tk.DoubleVar(value=self.cfg.get("font_scale", 1.0))
+        self.font_scale_slider = ctk.CTkSlider(
+            size_row, from_=0.6, to=1.8, number_of_steps=12,
+            variable=self.font_scale_var, width=140,
+            command=self._on_font_scale_change
+        )
+        self.font_scale_slider.pack(side="right")
+        self.font_scale_label = ctk.CTkLabel(
+            size_row, text=f"{self.cfg.get('font_scale', 1.0):.1f}x",
+            font=ctk.CTkFont(size=11), width=36
+        )
+        self.font_scale_label.pack(side="right", padx=(0, 6))
+
+        # 字体预览
+        self.font_preview = ctk.CTkLabel(
+            font_frame, text="预览：11:59:59 ¥88.88",
+            font=ctk.CTkFont(size=13),
+            text_color=colors["time"]
+        )
+        self.font_preview.pack(padx=12, pady=(0, 8))
+
         # ── 功能设置 ──
         func_frame = ctk.CTkFrame(self, fg_color=card_bg)
         func_frame.pack(fill="x", padx=20, pady=5)
@@ -658,6 +757,19 @@ class SettingsWindow(ctk.CTkToplevel):
     def _toggle_show(self):
         self.api_entry.configure(show="" if self.show_var.get() else "*")
 
+    def _on_font_scale_change(self, value):
+        """字体大小滑块变化时更新预览"""
+        scale = round(value, 1)
+        self.font_scale_label.configure(text=f"{scale:.1f}x")
+        # 更新预览字体
+        preset = self.font_var.get()
+        family = get_font_family(preset)
+        size = max(8, int(13 * scale))
+        if family:
+            self.font_preview.configure(font=ctk.CTkFont(family=family, size=size))
+        else:
+            self.font_preview.configure(font=ctk.CTkFont(size=size))
+
     def _confirm(self):
         """确认：应用所有设置并保存"""
         self.cfg["api_key"] = self.api_entry.get().strip()
@@ -665,6 +777,8 @@ class SettingsWindow(ctk.CTkToplevel):
         self.cfg["low_balance_alert"] = self.alert_var.get()
         self.cfg["topmost"] = self.topmost_var.get()
         self.cfg["theme"] = self.theme_var.get()
+        self.cfg["font_family"] = self.font_var.get()
+        self.cfg["font_scale"] = round(self.font_scale_var.get(), 1)
         try:
             self.cfg["low_balance_threshold"] = float(self.threshold_entry.get())
         except ValueError:
