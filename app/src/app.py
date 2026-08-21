@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.0.4"
+APP_VERSION = "2.0.5"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -307,6 +307,12 @@ class DeepSeekMeter(ctk.CTk):
         self.attributes("-topmost", self.cfg["topmost"])
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        # ── 窗口图标 ──
+        try:
+            self._set_window_icon()
+        except Exception:
+            pass
+
         # 恢复窗口位置和大小
         if self.cfg["window_x"] is not None:
             w = self.cfg.get("window_w", 280)
@@ -325,6 +331,15 @@ class DeepSeekMeter(ctk.CTk):
         self._update_clock()
         self._start_balance_thread()
 
+    def _set_window_icon(self):
+        """设置窗口图标（标题栏 + 任务栏）"""
+        import tkinter as _tk
+        logo_path = get_data_path("app_logo.png")
+        if os.path.exists(logo_path):
+            img = _tk.PhotoImage(file=logo_path)
+            self.iconphoto(True, img)
+            self._window_icon_ref = img  # 防止GC回收
+
     def _get_colors(self):
         """获取当前主题配色"""
         return THEMES.get(self.current_theme, THEMES["dark"])
@@ -334,10 +349,21 @@ class DeepSeekMeter(ctk.CTk):
         colors = self._get_colors()
         self.configure(fg_color=colors["bg"])
 
-        # ── 顶部栏：图钉按钮 ──
-        top_bar = ctk.CTkFrame(self, fg_color="transparent", height=32)
-        top_bar.pack(fill="x", padx=8, pady=(8, 0))
+        # ── 顶部栏：logo + 图钉按钮 ──
+        top_bar = ctk.CTkFrame(self, fg_color="transparent", height=36)
+        top_bar.pack(fill="x", padx=8, pady=(6, 0))
         top_bar.pack_propagate(False)
+
+        # logo
+        try:
+            import tkinter as _tk
+            logo_path = get_data_path("app_logo.png")
+            self._logo_img = _tk.PhotoImage(file=logo_path)
+            # 缩放到 28x28
+            self._logo_label = ctk.CTkLabel(top_bar, image=self._logo_img, text="")
+            self._logo_label.pack(side="left", padx=(2, 6))
+        except Exception:
+            pass
 
         self.pin_state = self.cfg["topmost"]
         pin_color = "#2196F3" if self.pin_state else "#666"
