@@ -26,7 +26,10 @@ Desktop.ini
 *.swo
 
 # PyInstaller build artifacts
-app/build/DeepSeek-Meter/
+app/build/
+app/dist/
+stable/build/
+stable/dist/
 *.spec
 
 # OS
@@ -34,5 +37,9 @@ app/build/DeepSeek-Meter/
 .DS_Store?
 ._*
 .Spotlight-V100
-.Trashes"app/build/build/"  
-app/build/  
+.Trashes
+
+# Temp files
+t.py
+temp_*.py
+check.py
