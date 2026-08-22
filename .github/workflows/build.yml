@@ -92,9 +92,21 @@ jobs:
               f.write(notes)
           print('Release notes extracted for $TAG')
           "
+      - name: Check if pre-release
+        id: prerelease
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if echo "$TAG" | grep -qiE '\-(snapshots?|alpha|beta|rc|dev|preview)'; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "$TAG -> pre-release"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "$TAG -> latest"
+          fi
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           files: |
             dist/DeepSeek-Meter-Windows/DeepSeek-Meter.exe
             dist/DeepSeek-Meter-Linux/DeepSeek-Meter
