@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.1.1"
+APP_VERSION = "2.2.0"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -94,6 +94,13 @@ DEFAULT_CONFIG = {
     "window_h": 160,
     "font_family": "默认",
     "font_size": 14,  # 字号（pt）
+    # ── 快捷键 ──
+    "hotkeys": {
+        "toggle_visibility": "ctrl+alt+d",
+        "open_settings": "ctrl+alt+s",
+        "toggle_mode": "ctrl+alt+m",
+        "quit": "ctrl+alt+q",
+    },
 }
 
 
@@ -125,7 +132,7 @@ def parse_version(v: str):
 
 
 def check_update():
-    """检查 GitHub Releases 是否有新版本，返回 (latest_ver, exe_url, body) 或 None"""
+    """检查 GitHub Releases 是否有新版本，返回 (latest_tag, release_url, body) 或 None"""
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
         req = urllib.request.Request(url, headers={
@@ -142,84 +149,11 @@ def check_update():
         if latest_ver <= current_ver:
             return None
 
-        # 找 Windows exe 下载链接
-        exe_url = None
-        for asset in data.get("assets", []):
-            name = asset.get("name", "")
-            if name.lower().endswith(".exe"):
-                exe_url = asset.get("browser_download_url")
-                break
-
-        if not exe_url:
-            return None
-
+        release_url = data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases/latest")
         body = data.get("body", "") or ""
-        return latest_tag, exe_url, body
+        return latest_tag, release_url, body
     except Exception:
         return None
-
-
-def download_and_install(exe_url: str, progress_cb=None):
-    """下载新 exe 到临时位置，写 VBS 脚本替换并重启"""
-    import tempfile
-
-    # 下载到临时文件
-    tmp_dir = Path(tempfile.gettempdir()) / APP_NAME
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    tmp_exe = tmp_dir / f"{APP_NAME}-update.exe"
-
-    req = urllib.request.Request(exe_url, headers={
-        "User-Agent": f"{APP_NAME}/{APP_VERSION}",
-    })
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        total = int(resp.headers.get("Content-Length", 0))
-        downloaded = 0
-        with open(tmp_exe, "wb") as f:
-            while True:
-                chunk = resp.read(65536)
-                if not chunk:
-                    break
-                f.write(chunk)
-                downloaded += len(chunk)
-                if progress_cb and total > 0:
-                    progress_cb(downloaded, total)
-
-    # 当前 exe 路径（PyInstaller onefile模式下 sys.executable 指向临时目录，用 sys.argv[0]）
-    if getattr(sys, "frozen", False):
-        current_exe = Path(sys.argv[0]).resolve()
-    else:
-        current_exe = Path(__file__).resolve()
-
-    # 写 VBS 脚本：循环等旧进程退出 → 替换 → 启动 → 删除自身
-    vbs_path = tmp_dir / "updater.vbs"
-    vbs_content = f'''Set fso = CreateObject("Scripting.FileSystemObject")
-Set shell = CreateObject("WScript.Shell")
-' 循环等待旧进程退出（最多60秒）
-For i = 1 To 60
-    WScript.Sleep 1000
-    Set proc = shell.Exec("cmd /c tasklist /fi \\"IMAGENAME eq {current_exe.name}\\" /fo csv /nh")
-    output = proc.StdOut.ReadAll
-    If InStr(output, "{current_exe.name}") = 0 Then Exit For
-Next
-WScript.Sleep 1000
-On Error Resume Next
-fso.CopyFile "{tmp_exe}", "{current_exe}", True
-If Err.Number = 0 Then
-    shell.Run """{current_exe}""", 0, False
-End If
-WScript.Sleep 2000
-fso.DeleteFile "{tmp_exe}", True
-fso.DeleteFile WScript.ScriptFullName, True
-'''
-    with open(vbs_path, "w", encoding="gbk") as f:
-        f.write(vbs_content)
-
-    # 启动 VBS 脚本，然后退出当前进程
-    os.startfile(str(vbs_path))
-    try:
-        sys.exit(0)
-    except Exception:
-        os._exit(0)
 
 
 # ─── API 查询 ────────────────────────────────────────────
@@ -350,7 +284,12 @@ class DeepSeekMeter(ctk.CTk):
 
         # ── 窗口设置 ──
         self.title(APP_NAME)
-        self.geometry("280x160")
+        # 窗口大小根据字号动态计算（12pt 为基准：280x160）
+        base_size = self.cfg.get("font_size", 12)
+        scale = max(0.6, base_size / 12)
+        init_w = max(220, int(280 * scale))
+        init_h = max(120, int(160 * scale))
+        self.geometry(f"{init_w}x{init_h}")
         self.minsize(220, 120)
         self.attributes("-topmost", self.cfg["topmost"])
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -364,13 +303,14 @@ class DeepSeekMeter(ctk.CTk):
         except Exception:
             pass
 
-        # 恢复窗口位置和大小
+        # 恢复窗口位置和大小（多屏位置保存）
         if self.cfg["window_x"] is not None:
-            w = self.cfg.get("window_w", 280)
-            h = self.cfg.get("window_h", 160)
+            w = self.cfg.get("window_w", init_w)
+            h = self.cfg.get("window_h", init_h)
             self.geometry(f"{w}x{h}+{self.cfg['window_x']}+{self.cfg['window_y']}")
 
-        # 记录窗口位置
+        # 记录窗口位置（拖拽 + 松手都保存，支持多屏坐标）
+        self.bind("<ButtonPress-1>", self._on_drag_start)
         self.bind("<ButtonRelease-1>", self._save_position)
         self.bind("<B1-Motion>", self._on_drag)
 
@@ -381,6 +321,9 @@ class DeepSeekMeter(ctk.CTk):
         self._clock_after_id = None
         self._update_clock()
         self._start_balance_thread()
+
+        # ── 全局快捷键 ──
+        self.setup_hotkeys()
 
     def _set_window_icon(self):
         """设置窗口图标（标题栏 + 任务栏）"""
@@ -575,9 +518,13 @@ class DeepSeekMeter(ctk.CTk):
             )
 
     # ── 窗口拖动 ──
+    def _on_drag_start(self, event):
+        self._drag_x = event.x
+        self._drag_y = event.y
+
     def _on_drag(self, event):
-        x = self.winfo_x() + event.x
-        y = self.winfo_y() + event.y
+        x = self.winfo_x() + event.x - self._drag_x
+        y = self.winfo_y() + event.y - self._drag_y
         self.geometry(f"+{x}+{y}")
 
     def _save_position(self, event=None):
@@ -603,6 +550,52 @@ class DeepSeekMeter(ctk.CTk):
         if self._settings_win and self._settings_win.winfo_exists():
             self._settings_win.deiconify()
             self._settings_win.lift()
+
+    # ── 全局快捷键 ──
+    def setup_hotkeys(self):
+        """注册全局快捷键"""
+        try:
+            import keyboard
+            hk = self.cfg.get("hotkeys", {})
+            if hk.get("toggle_visibility"):
+                keyboard.add_hotkey(hk["toggle_visibility"], self._hotkey_toggle_visibility, suppress=False)
+            if hk.get("open_settings"):
+                keyboard.add_hotkey(hk["open_settings"], self._hotkey_open_settings, suppress=False)
+            if hk.get("toggle_mode"):
+                keyboard.add_hotkey(hk["toggle_mode"], lambda: None, suppress=False)  # 暂不实现挂件模式
+            if hk.get("quit"):
+                keyboard.add_hotkey(hk["quit"], self._hotkey_quit, suppress=False)
+        except ImportError:
+            pass  # keyboard 库未安装则跳过
+        except Exception:
+            pass
+
+    def _hotkey_toggle_visibility(self):
+        """快捷键：显示/隐藏窗口"""
+        if self.state() == "withdrawn":
+            self.after(0, self._on_show)
+        else:
+            self.after(0, self.withdraw)
+
+    def _hotkey_open_settings(self):
+        """快捷键：打开设置"""
+        self.after(0, self._open_settings_from_hotkey)
+
+    def _open_settings_from_hotkey(self):
+        if self._opening_settings:
+            return
+        if self._settings_win and self._settings_win.winfo_exists():
+            self._settings_win.lift()
+            self._settings_win.focus_force()
+            return
+        self._opening_settings = True
+        self._settings_win = SettingsWindow(self, self.cfg, self._on_settings_save)
+        self._opening_settings = False
+
+    def _hotkey_quit(self):
+        """快捷键：退出程序"""
+        self.running = False
+        self.after(0, self.destroy)
 
     def _on_close(self):
         self._save_position()
@@ -1008,64 +1001,23 @@ def _do_update_check(app, silent=False):
 
 
 def _show_update_result(app, result, silent):
-    """显示更新检查结果"""
+    """显示更新检查结果，确认后打开浏览器跳转到 Release 页面"""
+    import webbrowser
     if result is None:
         if not silent:
             messagebox.showinfo("检查更新", f"当前已是最新版本 ({APP_VERSION})")
         return
 
-    latest_tag, exe_url, body = result
+    latest_tag, release_url, body = result
     # 截取 changelog 前几行
     lines = [l for l in body.strip().splitlines() if l.strip()]
     summary = "\n".join(lines[:10])
     if len(lines) > 10:
         summary += "\n..."
 
-    msg = f"发现新版本 {latest_tag}（当前 {APP_VERSION}）\n\n{summary}\n\n是否立即下载更新？"
+    msg = f"发现新版本 {latest_tag}（当前 {APP_VERSION}）\n\n{summary}\n\n是否打开下载页面？"
     if messagebox.askyesno("发现更新", msg):
-        _show_download_progress(app, exe_url, latest_tag)
-
-
-def _show_download_progress(app, exe_url, version):
-    """显示下载进度条窗口"""
-    win = ctk.CTkToplevel(app)
-    win.title("正在更新")
-    win.geometry("360x150")
-    win.resizable(False, False)
-    win.transient(app)
-    win.grab_set()
-
-    theme = resolve_theme(app.cfg["theme"])
-    bg = THEMES[theme]["bg"]
-    win.configure(fg_color=bg)
-
-    ctk.CTkLabel(win, text=f"正在下载 {version}...",
-                  font=ctk.CTkFont(size=14)).pack(pady=(20, 10))
-
-    progress = ctk.CTkProgressBar(win, width=300)
-    progress.pack(pady=5)
-    progress.set(0)
-
-    status_label = ctk.CTkLabel(win, text="准备下载...",
-                                 font=ctk.CTkFont(size=11))
-    status_label.pack(pady=5)
-
-    def _download():
-        try:
-            def _on_progress(downloaded, total):
-                pct = downloaded / total if total > 0 else 0
-                mb_dl = downloaded / 1048576
-                mb_total = total / 1048576
-                app.after(0, lambda: progress.set(pct))
-                app.after(0, lambda: status_label.configure(
-                    text=f"{mb_dl:.1f} / {mb_total:.1f} MB"))
-
-            download_and_install(exe_url, _on_progress)
-        except Exception as e:
-            app.after(0, lambda: messagebox.showerror("更新失败", str(e)))
-            app.after(0, win.destroy)
-
-    threading.Thread(target=_download, daemon=True).start()
+        webbrowser.open(release_url)
 
 
 # ═══════════════════════════════════════════════════════════
