@@ -79,18 +79,21 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           python3 -c "
-          import re
+          import re, sys
+          tag = '$TAG'
+          # 统一格式：tag里的-在CHANGELOG里可能是空格，也可能是-
+          tag_pattern = re.escape(tag).replace(r'\-', r'[\-\s]')
           with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
               content = f.read()
-          pattern = r'## ' + re.escape('$TAG') + r'.*?(?=## v|\Z)'
+          pattern = r'## ' + tag_pattern + r'.*?(?=## v|\Z)'
           match = re.search(pattern, content, re.DOTALL)
           if match:
               notes = match.group(0).strip()
           else:
-              notes = '## $TAG\n\nNo changelog entry found.'
+              notes = '## ' + tag + '\n\nNo changelog entry found.'
           with open('release_notes.md', 'w', encoding='utf-8') as f:
               f.write(notes)
-          print('Release notes extracted for $TAG')
+          print('Release notes extracted for', tag)
           "
       - name: Check if pre-release
         id: prerelease
