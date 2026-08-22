@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.1.1"
+APP_VERSION = "3.0.0-snapshots 1"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -94,7 +94,24 @@ DEFAULT_CONFIG = {
     "window_h": 160,
     "font_family": "默认",
     "font_size": 14,  # 字号（pt）
+    # ── 挂件模式 ──
+    "display_mode": "window",  # "window" / "widget"
+    "widget_opacity": 0.85,  # 挂件透明度 0.0~1.0
+    "widget_position": "bottom_right",  # 左上/右上/右下/左下
+    "mouse_passthrough": False,  # 鼠标穿透
+    "widget_time_color": "#FFFFFF",  # 挂件时间颜色
+    "widget_date_color": "#888888",  # 挂件日期颜色
+    # ── 快捷键 ──
+    "hotkeys": {
+        "toggle_visibility": "ctrl+alt+d",
+        "open_settings": "ctrl+alt+s",
+        "toggle_mode": "ctrl+alt+m",
+        "quit": "ctrl+alt+q",
+    },
 }
+
+# 挂件模式下的透明色（Windows）
+WIDGET_TRANSPARENT_COLOR = "#010101"
 
 
 def load_config():
@@ -125,7 +142,7 @@ def parse_version(v: str):
 
 
 def check_update():
-    """检查 GitHub Releases 是否有新版本，返回 (latest_ver, exe_url, body) 或 None"""
+    """检查 GitHub Releases 是否有新版本，返回 (latest_ver, release_url, body) 或 None"""
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
         req = urllib.request.Request(url, headers={
@@ -142,84 +159,12 @@ def check_update():
         if latest_ver <= current_ver:
             return None
 
-        # 找 Windows exe 下载链接
-        exe_url = None
-        for asset in data.get("assets", []):
-            name = asset.get("name", "")
-            if name.lower().endswith(".exe"):
-                exe_url = asset.get("browser_download_url")
-                break
-
-        if not exe_url:
-            return None
-
+        release_url = data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases/latest")
         body = data.get("body", "") or ""
-        return latest_tag, exe_url, body
+        return latest_tag, release_url, body
     except Exception:
         return None
 
-
-def download_and_install(exe_url: str, progress_cb=None):
-    """下载新 exe 到临时位置，写 VBS 脚本替换并重启"""
-    import tempfile
-
-    # 下载到临时文件
-    tmp_dir = Path(tempfile.gettempdir()) / APP_NAME
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    tmp_exe = tmp_dir / f"{APP_NAME}-update.exe"
-
-    req = urllib.request.Request(exe_url, headers={
-        "User-Agent": f"{APP_NAME}/{APP_VERSION}",
-    })
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        total = int(resp.headers.get("Content-Length", 0))
-        downloaded = 0
-        with open(tmp_exe, "wb") as f:
-            while True:
-                chunk = resp.read(65536)
-                if not chunk:
-                    break
-                f.write(chunk)
-                downloaded += len(chunk)
-                if progress_cb and total > 0:
-                    progress_cb(downloaded, total)
-
-    # 当前 exe 路径（PyInstaller onefile模式下 sys.executable 指向临时目录，用 sys.argv[0]）
-    if getattr(sys, "frozen", False):
-        current_exe = Path(sys.argv[0]).resolve()
-    else:
-        current_exe = Path(__file__).resolve()
-
-    # 写 VBS 脚本：循环等旧进程退出 → 替换 → 启动 → 删除自身
-    vbs_path = tmp_dir / "updater.vbs"
-    vbs_content = f'''Set fso = CreateObject("Scripting.FileSystemObject")
-Set shell = CreateObject("WScript.Shell")
-' 循环等待旧进程退出（最多60秒）
-For i = 1 To 60
-    WScript.Sleep 1000
-    Set proc = shell.Exec("cmd /c tasklist /fi \\"IMAGENAME eq {current_exe.name}\\" /fo csv /nh")
-    output = proc.StdOut.ReadAll
-    If InStr(output, "{current_exe.name}") = 0 Then Exit For
-Next
-WScript.Sleep 1000
-On Error Resume Next
-fso.CopyFile "{tmp_exe}", "{current_exe}", True
-If Err.Number = 0 Then
-    shell.Run """{current_exe}""", 0, False
-End If
-WScript.Sleep 2000
-fso.DeleteFile "{tmp_exe}", True
-fso.DeleteFile WScript.ScriptFullName, True
-'''
-    with open(vbs_path, "w", encoding="gbk") as f:
-        f.write(vbs_content)
-
-    # 启动 VBS 脚本，然后退出当前进程
-    os.startfile(str(vbs_path))
-    try:
-        sys.exit(0)
-    except Exception:
-        os._exit(0)
 
 
 # ─── API 查询 ────────────────────────────────────────────
@@ -346,7 +291,12 @@ class DeepSeekMeter(ctk.CTk):
 
         # ── 窗口设置 ──
         self.title(APP_NAME)
-        self.geometry("280x160")
+        # 窗口大小根据字号动态计算（12pt 为基准：280×160）
+        base_size = self.cfg.get("font_size", 12)
+        scale = max(0.6, base_size / 12)
+        init_w = max(220, int(280 * scale))
+        init_h = max(120, int(160 * scale))
+        self.geometry(f"{init_w}x{init_h}")
         self.minsize(220, 120)
         self.attributes("-topmost", self.cfg["topmost"])
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -367,7 +317,8 @@ class DeepSeekMeter(ctk.CTk):
             self.geometry(f"{w}x{h}+{self.cfg['window_x']}+{self.cfg['window_y']}")
 
         # 记录窗口位置
-        self.bind("<ButtonRelease-1>", self._save_position)
+        self.bind("<ButtonPress-1>", self._on_drag_start)
+        self.bind("<ButtonRelease-1>", self._on_drag_end)
         self.bind("<B1-Motion>", self._on_drag)
 
         # ── UI ──
@@ -377,6 +328,13 @@ class DeepSeekMeter(ctk.CTk):
         self._clock_after_id = None
         self._update_clock()
         self._start_balance_thread()
+
+        # ── 全局快捷键 ──
+        self.setup_hotkeys()
+
+        # ── 如果上次是挂件模式，启动时恢复 ──
+        if self.cfg.get("display_mode") == "widget":
+            self.after(100, self.switch_to_widget_mode)
 
     def _set_window_icon(self):
         """设置窗口图标（标题栏 + 任务栏）"""
@@ -402,6 +360,232 @@ class DeepSeekMeter(ctk.CTk):
             img = Image.open(logo_path).resize((32, 32), Image.LANCZOS)
             self._window_icon_ref = ImageTk.PhotoImage(img)
             self.iconphoto(True, self._window_icon_ref)
+
+    # ── 挂件模式 ──────────────────────────────────────────
+    def _set_snap(self, enable):
+        """启用/禁用 Windows 窗口吸附（Snap）"""
+        try:
+            import winreg
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, "SnapAssist", 0, winreg.REG_DWORD, 1 if enable else 0)
+            # 通知系统设置已变更
+            import ctypes
+            HWND_BROADCAST = 0xFFFF
+            WM_SETTINGCHANGE = 0x001A
+            ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Advanced")
+        except Exception:
+            pass
+
+    def switch_to_widget_mode(self):
+        """切换到挂件模式：无标题栏、半透明、可穿透"""
+        self.cfg["display_mode"] = "widget"
+        self._save_position()
+        # 保存窗口模式下的位置
+        self._window_mode_x = self.winfo_x()
+        self._window_mode_y = self.winfo_y()
+
+        self.overrideredirect(True)  # 去掉标题栏
+        self._set_tool_window()  # 阻止 Windows Snap 吸附
+        self._set_snap(False)  # 临时禁用系统 Snap
+        opacity = self.cfg.get("widget_opacity", 0.85)
+        self.attributes("-alpha", opacity)
+        self.attributes("-topmost", True)  # 挂件强制置顶
+        # 设置透明背景（Windows）
+        try:
+            self.configure(fg_color=WIDGET_TRANSPARENT_COLOR)
+            self.attributes("-transparentcolor", WIDGET_TRANSPARENT_COLOR)
+        except Exception:
+            pass
+        # 鼠标穿透
+        if self.cfg.get("mouse_passthrough", False):
+            self._set_click_through(True)
+        # 隐藏图钉按钮
+        self.pin_btn.pack_forget()
+        # 设置挂件位置
+        self._place_widget()
+        # 绑定双击回到窗口模式
+        self.bind("<Double-Button-1>", lambda e: self.switch_to_window_mode())
+        # 应用自定义字体颜色
+        self._apply_widget_colors()
+        # 延迟重新设置工具窗口样式（overrideredirect 后需要等窗口稳定）
+        self.after(50, self._set_tool_window)
+        save_config(self.cfg)
+
+    def switch_to_window_mode(self):
+        """切换回窗口模式"""
+        self.cfg["display_mode"] = "window"
+        # 恢复系统 Snap
+        self._set_snap(True)
+        # 取消鼠标穿透
+        self._set_click_through(False)
+        self.overrideredirect(False)  # 恢复标题栏
+        self.attributes("-alpha", 1.0)  # 完全不透明
+        try:
+            self.attributes("-transparentcolor", "")
+        except Exception:
+            pass
+        self.attributes("-topmost", self.cfg["topmost"])
+        # 显式重置背景色（挂件模式的透明色不能留）
+        colors = self._get_colors()
+        self.configure(fg_color=colors["bg"])
+        # 恢复图钉按钮
+        self.pin_btn.pack(side="right", padx=4)
+        # 恢复之前的位置
+        x = getattr(self, '_window_mode_x', None)
+        y = getattr(self, '_window_mode_y', None)
+        if x is not None and y is not None:
+            w = self.cfg.get("window_w", 280)
+            h = self.cfg.get("window_h", 160)
+            self.geometry(f"{w}x{h}+{x}+{y}")
+        # 取消双击绑定
+        self.unbind("<Double-Button-1>")
+        # 刷新主题确保所有子组件颜色正确
+        self._refresh_theme()
+        save_config(self.cfg)
+
+    def _place_widget(self):
+        """将挂件放到屏幕指定角落"""
+        self.update_idletasks()
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        pos = self.cfg.get("widget_position", "bottom_right")
+        margin = 10
+        positions = {
+            "top_left": (margin, margin),
+            "top_right": (sw - w - margin, margin),
+            "bottom_left": (margin, sh - h - margin),
+            "bottom_right": (sw - w - margin, sh - h - margin),
+        }
+        x, y = positions.get(pos, positions["bottom_right"])
+        self.geometry(f"+{x}+{y}")
+
+    def _set_click_through(self, enable):
+        """Windows 设置鼠标穿透"""
+        try:
+            import ctypes
+            hwnd = self.winfo_id()
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
+            WS_EX_TRANSPARENT = 0x00000020
+            WS_EX_LAYERED = 0x00080000
+            if enable:
+                style |= WS_EX_TRANSPARENT | WS_EX_LAYERED
+            else:
+                style &= ~WS_EX_TRANSPARENT
+            ctypes.windll.user32.SetWindowLongW(hwnd, -20, style)
+        except Exception:
+            pass
+
+    def _set_tool_window(self):
+        """设置扩展样式 + DWM属性，彻底阻止 Windows Snap 吸附"""
+        try:
+            import ctypes
+            hwnd = self.winfo_id()
+            GWL_EXSTYLE = -20
+            WS_EX_TOOLWINDOW = 0x00000080
+            WS_EX_NOACTIVATE = 0x08000000
+            WS_EX_NOINHERITLAYOUT = 0x00100000
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            style |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOINHERITLAYOUT
+            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+            # DWM: 禁用非客户区渲染（阻止 Snap 检测边缘吸附）
+            try:
+                DWMWA_NCRENDERING_POLICY = 2
+                DWMNCRP_DISABLED = 2
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, DWMWA_NCRENDERING_POLICY,
+                    ctypes.byref(ctypes.c_int(DWMNCRP_DISABLED)),
+                    ctypes.sizeof(ctypes.c_int)
+                )
+            except Exception:
+                pass
+            # 强制刷新窗口样式
+            SWP_FRAMECHANGED = 0x0020
+            SWP_NOACTIVATE = 0x0010
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOZORDER = 0x0004
+            ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0,
+                SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER)
+        except Exception:
+            pass
+
+    def _apply_widget_colors(self):
+        """应用挂件自定义字体颜色"""
+        tc = self.cfg.get("widget_time_color", "#FFFFFF")
+        dc = self.cfg.get("widget_date_color", "#888888")
+        self.time_label.configure(text_color=tc)
+        self.date_label.configure(text_color=dc)
+
+    # ── 快捷键 ────────────────────────────────────────────
+    def setup_hotkeys(self):
+        """注册全局快捷键"""
+        try:
+            import keyboard
+            hk = self.cfg.get("hotkeys", {})
+            if hk.get("toggle_visibility"):
+                keyboard.add_hotkey(hk["toggle_visibility"], self._hotkey_toggle_visibility, suppress=False)
+            if hk.get("open_settings"):
+                keyboard.add_hotkey(hk["open_settings"], self._hotkey_open_settings, suppress=False)
+            if hk.get("toggle_mode"):
+                keyboard.add_hotkey(hk["toggle_mode"], self._hotkey_toggle_mode, suppress=False)
+            if hk.get("quit"):
+                keyboard.add_hotkey(hk["quit"], self._hotkey_quit, suppress=False)
+        except ImportError:
+            pass  # keyboard 库未安装，跳过
+        except Exception:
+            pass  # 快捷键注册失败（可能权限不足），静默跳过
+
+    def _hotkey_toggle_visibility(self):
+        """快捷键：显示/隐藏"""
+        if self.winfo_viewable():
+            self.withdraw()
+        else:
+            self._on_show()
+
+    def _hotkey_open_settings(self):
+        """快捷键：打开设置"""
+        self.after(0, self._open_settings)
+
+    def _hotkey_toggle_mode(self):
+        """快捷键：切换窗口/挂件模式"""
+        self.after(0, self._toggle_display_mode)
+
+    def _hotkey_quit(self):
+        """快捷键：退出"""
+        self.after(0, self._force_quit)
+
+    def _toggle_display_mode(self):
+        """切换显示模式"""
+        if self.cfg.get("display_mode") == "window":
+            self.switch_to_widget_mode()
+        else:
+            self.switch_to_window_mode()
+
+    def _open_settings(self):
+        """打开设置面板"""
+        if self._opening_settings:
+            return
+        if self._settings_win and self._settings_win.winfo_exists():
+            self._settings_win.lift()
+            self._settings_win.focus_force()
+            return
+        self._opening_settings = True
+        self._settings_win = SettingsWindow(self, self.cfg, self._on_settings_save)
+        self._opening_settings = False
+
+    def _force_quit(self):
+        """强制退出程序"""
+        self.running = False
+        self._set_snap(True)  # 恢复系统 Snap
+        try:
+            import keyboard
+            keyboard.unhook_all()
+        except Exception:
+            pass
+        self.destroy()
 
     def _get_colors(self):
         """获取当前主题配色"""
@@ -439,7 +623,8 @@ class DeepSeekMeter(ctk.CTk):
         self.time_label = ctk.CTkLabel(
             self.container, text="00:00:00",
             font=make_font(font_preset, font_size, "time"),
-            text_color=colors["time"]
+            text_color=colors["time"],
+            fg_color="transparent"
         )
         self.time_label.pack(pady=(4, 0), expand=True)
 
@@ -451,14 +636,16 @@ class DeepSeekMeter(ctk.CTk):
         self.pv_label = ctk.CTkLabel(
             self.info_frame, text=pv_text,
             font=make_font(font_preset, font_size, "peak_valley"),
-            text_color=pv_color
+            text_color=pv_color,
+            fg_color="transparent"
         )
         self.pv_label.pack(side="left", padx=(0, 12))
 
         self.balance_label = ctk.CTkLabel(
             self.info_frame, text="¥--",
             font=make_font(font_preset, font_size, "balance"),
-            text_color="#00C853"
+            text_color="#00C853",
+            fg_color="transparent"
         )
         self.balance_label.pack(side="left")
 
@@ -466,7 +653,8 @@ class DeepSeekMeter(ctk.CTk):
         self.date_label = ctk.CTkLabel(
             self.container, text="",
             font=make_font(font_preset, font_size, "date"),
-            text_color=colors["date"]
+            text_color=colors["date"],
+            fg_color="transparent"
         )
         self.date_label.pack(pady=(6, 0), expand=True)
 
@@ -474,10 +662,12 @@ class DeepSeekMeter(ctk.CTk):
         """刷新主题"""
         self.current_theme = resolve_theme(self.cfg["theme"])
         ctk.set_appearance_mode(self.current_theme)
-        colors = self._get_colors()
-        self.configure(fg_color=colors["bg"])
-        self.time_label.configure(text_color=colors["time"])
-        self.date_label.configure(text_color=colors["date"])
+        # 挂件模式下不要重置 fg_color，否则透明背景失效
+        if self.cfg.get("display_mode") != "widget":
+            colors = self._get_colors()
+            self.configure(fg_color=colors["bg"])
+        self.time_label.configure(text_color=THEMES[self.current_theme]["time"])
+        self.date_label.configure(text_color=THEMES[self.current_theme]["date"])
         self._refresh_fonts()
 
     def _refresh_fonts(self):
@@ -571,16 +761,53 @@ class DeepSeekMeter(ctk.CTk):
             )
 
     # ── 窗口拖动 ──
+    def _on_drag_start(self, event):
+        """拖拽开始"""
+        self._dragging = True
+
+    def _on_drag_end(self, event):
+        """拖拽结束"""
+        self._dragging = False
+        self._save_position()
+
     def _on_drag(self, event):
+        """拖拽移动窗口"""
+        if not getattr(self, '_dragging', False):
+            return
         x = self.winfo_x() + event.x
         y = self.winfo_y() + event.y
         self.geometry(f"+{x}+{y}")
 
     def _save_position(self, event=None):
-        self.cfg["window_x"] = self.winfo_x()
-        self.cfg["window_y"] = self.winfo_y()
-        self.cfg["window_w"] = self.winfo_width()
-        self.cfg["window_h"] = self.winfo_height()
+        x = self.winfo_x()
+        y = self.winfo_y()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        # 防护：窗口尺寸/位置明显异常时不保存（防止 Snap 吸附导致脏数据）
+        # 使用虚拟屏幕尺寸（包含所有显示器）而非仅主屏
+        try:
+            import ctypes
+            SM_XVIRTUALSCREEN = 76
+            SM_YVIRTUALSCREEN = 77
+            SM_CXVIRTUALSCREEN = 78
+            SM_CYVIRTUALSCREEN = 79
+            vx = ctypes.windll.user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+            vy = ctypes.windll.user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+            vw = ctypes.windll.user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+            vh = ctypes.windll.user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+        except Exception:
+            # fallback: 用主屏 + 余量
+            vx, vy = -1920, -1080
+            vw = self.winfo_screenwidth() + 3840
+            vh = self.winfo_screenheight() + 2160
+        if w > vw * 0.8 or h > vh * 0.8:
+            return  # 尺寸异常
+        if x < vx - 200 or y < vy - 200 or x > vx + vw + 200 or y > vy + vh + 200:
+            return  # 位置完全超出虚拟屏幕范围
+        self.cfg["window_x"] = x
+        self.cfg["window_y"] = y
+        self.cfg["window_w"] = w
+        self.cfg["window_h"] = h
         save_config(self.cfg)
 
     def _on_map(self, event=None):
@@ -720,7 +947,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._card_bg = card_bg
 
         self.title("设置")
-        self.geometry("380x520")
+        self.geometry("380x680")
         self.resizable(False, False)
         self.configure(fg_color=bg)
 
@@ -861,6 +1088,108 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkCheckBox(api_frame, text="显示 Key", variable=self.show_var,
                          command=self._toggle_show).pack(anchor="w", padx=12, pady=(0, 8))
 
+        # ── 显示模式 ──
+        display_frame = ctk.CTkFrame(self._scroll, fg_color=card_bg)
+        display_frame.pack(fill="x", padx=20, pady=5)
+
+        ctk.CTkLabel(display_frame, text="显示模式",
+                      font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=12, pady=(8, 4))
+
+        self.display_mode_var = tk.StringVar(value=self.cfg.get("display_mode", "window"))
+        mode_frame = ctk.CTkFrame(display_frame, fg_color="transparent")
+        mode_frame.pack(fill="x", padx=12, pady=(0, 8))
+        ctk.CTkRadioButton(mode_frame, text="窗口模式", variable=self.display_mode_var,
+                            value="window").pack(side="left", padx=(0, 20))
+        ctk.CTkRadioButton(mode_frame, text="挂件模式", variable=self.display_mode_var,
+                            value="widget").pack(side="left")
+
+        # 挂件透明度
+        opacity_frame = ctk.CTkFrame(display_frame, fg_color="transparent")
+        opacity_frame.pack(fill="x", padx=12, pady=(0, 8))
+        ctk.CTkLabel(opacity_frame, text="挂件透明度",
+                      font=ctk.CTkFont(size=12)).pack(side="left")
+        self.opacity_var = tk.DoubleVar(value=self.cfg.get("widget_opacity", 0.85))
+        self.opacity_slider = ctk.CTkSlider(
+            opacity_frame, from_=0.3, to=1.0,
+            variable=self.opacity_var, width=140,
+            command=self._on_opacity_change
+        )
+        self.opacity_slider.pack(side="right")
+        self.opacity_label = ctk.CTkLabel(opacity_frame, text=f"{self.opacity_var.get():.0%}",
+                                           font=ctk.CTkFont(size=11), width=40)
+        self.opacity_label.pack(side="right", padx=(0, 8))
+
+        # 挂件位置
+        pos_frame = ctk.CTkFrame(display_frame, fg_color="transparent")
+        pos_frame.pack(fill="x", padx=12, pady=(0, 8))
+        ctk.CTkLabel(pos_frame, text="挂件位置",
+                      font=ctk.CTkFont(size=12)).pack(side="left")
+        self.pos_var = tk.StringVar(value=self.cfg.get("widget_position", "bottom_right"))
+        self.pos_menu = ctk.CTkOptionMenu(
+            pos_frame, variable=self.pos_var,
+            values=["top_left", "top_right", "bottom_left", "bottom_right"],
+            width=120
+        )
+        self.pos_menu.pack(side="right")
+
+        # 鼠标穿透
+        self.passthrough_var = tk.BooleanVar(value=self.cfg.get("mouse_passthrough", False))
+        ctk.CTkCheckBox(display_frame, text="鼠标穿透（挂件模式下点击穿透到桌面）",
+                         variable=self.passthrough_var).pack(anchor="w", padx=12, pady=(0, 8))
+
+        # 挂件字体颜色
+        ctk.CTkLabel(display_frame, text="挂件字体颜色",
+                      font=ctk.CTkFont(size=12)).pack(anchor="w", padx=12, pady=(4, 2))
+
+        color_row = ctk.CTkFrame(display_frame, fg_color="transparent")
+        color_row.pack(fill="x", padx=12, pady=(0, 8))
+
+        # 时间颜色
+        ctk.CTkLabel(color_row, text="时间", font=ctk.CTkFont(size=12)).pack(side="left")
+        self.time_color_var = tk.StringVar(value=self.cfg.get("widget_time_color", "#FFFFFF"))
+        self.time_color_preview = ctk.CTkLabel(color_row, text="  ",
+                                                fg_color=self.time_color_var.get(),
+                                                width=30, height=20, corner_radius=4)
+        self.time_color_preview.pack(side="left", padx=(6, 2))
+        ctk.CTkButton(color_row, text="选色", width=50, height=24,
+                       font=ctk.CTkFont(size=11),
+                       command=lambda: self._pick_color("time")).pack(side="left", padx=(0, 16))
+
+        # 日期颜色
+        ctk.CTkLabel(color_row, text="日期", font=ctk.CTkFont(size=12)).pack(side="left")
+        self.date_color_var = tk.StringVar(value=self.cfg.get("widget_date_color", "#888888"))
+        self.date_color_preview = ctk.CTkLabel(color_row, text="  ",
+                                                fg_color=self.date_color_var.get(),
+                                                width=30, height=20, corner_radius=4)
+        self.date_color_preview.pack(side="left", padx=(6, 2))
+        ctk.CTkButton(color_row, text="选色", width=50, height=24,
+                       font=ctk.CTkFont(size=11),
+                       command=lambda: self._pick_color("date")).pack(side="left")
+
+        # ── 快捷键 ──
+        hotkey_frame = ctk.CTkFrame(self._scroll, fg_color=card_bg)
+        hotkey_frame.pack(fill="x", padx=20, pady=5)
+
+        ctk.CTkLabel(hotkey_frame, text="快捷键（全局，后台生效）",
+                      font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=12, pady=(8, 4))
+
+        hk = self.cfg.get("hotkeys", {})
+        self.hk_entries = {}
+        hk_labels = [
+            ("toggle_visibility", "显示/隐藏"),
+            ("open_settings", "打开设置"),
+            ("toggle_mode", "切换窗口/挂件"),
+            ("quit", "退出程序"),
+        ]
+        for key, label in hk_labels:
+            row = ctk.CTkFrame(hotkey_frame, fg_color="transparent")
+            row.pack(fill="x", padx=12, pady=2)
+            ctk.CTkLabel(row, text=label, font=ctk.CTkFont(size=12), width=120, anchor="w").pack(side="left")
+            entry = ctk.CTkEntry(row, width=140, font=ctk.CTkFont(size=11))
+            entry.pack(side="right")
+            entry.insert(0, hk.get(key, ""))
+            self.hk_entries[key] = entry
+
         # ── 按钮 ──
         btn_frame = ctk.CTkFrame(self._scroll, fg_color="transparent")
         btn_frame.pack(pady=(12, 15))
@@ -878,6 +1207,27 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _toggle_show(self):
         self.api_entry.configure(show="" if self.show_var.get() else "*")
+
+    def _on_opacity_change(self, value):
+        """透明度滑块变化时更新标签"""
+        self.opacity_label.configure(text=f"{value:.0%}")
+
+    def _pick_color(self, target):
+        """打开颜色选择器"""
+        from tkinter import colorchooser
+        if target == "time":
+            current = self.time_color_var.get()
+        else:
+            current = self.date_color_var.get()
+        color = colorchooser.askcolor(initialcolor=current, title="选择颜色")
+        if color and color[1]:
+            hex_color = color[1]
+            if target == "time":
+                self.time_color_var.set(hex_color)
+                self.time_color_preview.configure(fg_color=hex_color)
+            else:
+                self.date_color_var.set(hex_color)
+                self.date_color_preview.configure(fg_color=hex_color)
 
     def _open_font_picker(self):
         """打开字体选择弹窗"""
@@ -913,6 +1263,22 @@ class SettingsWindow(ctk.CTkToplevel):
             self.cfg["low_balance_threshold"] = float(self.threshold_entry.get())
         except ValueError:
             pass
+        # 显示模式
+        self.cfg["display_mode"] = self.display_mode_var.get()
+        self.cfg["widget_opacity"] = round(self.opacity_var.get(), 2)
+        self.cfg["widget_position"] = self.pos_var.get()
+        self.cfg["mouse_passthrough"] = self.passthrough_var.get()
+        # 挂件字体颜色
+        self.cfg["widget_time_color"] = self.time_color_var.get()
+        self.cfg["widget_date_color"] = self.date_color_var.get()
+        # 快捷键
+        hotkeys = {}
+        for key, entry in self.hk_entries.items():
+            val = entry.get().strip()
+            if val:
+                hotkeys[key] = val
+        if hotkeys:
+            self.cfg["hotkeys"] = hotkeys
         save_config(self.cfg)
         set_auto_start(self.cfg["auto_start"])
         self.on_save(self.cfg)
@@ -976,6 +1342,9 @@ def create_tray_icon(app):
         app.after(0, app.destroy)
         icon.stop()
 
+    def on_toggle_mode(icon, item):
+        app.after(0, app._toggle_display_mode)
+
     icon = pystray.Icon(
         APP_NAME,
         make_icon(),
@@ -983,6 +1352,7 @@ def create_tray_icon(app):
         menu=pystray.Menu(
             pystray.MenuItem("显示", on_show, default=True),
             pystray.MenuItem("设置", on_settings),
+            pystray.MenuItem("切换模式", on_toggle_mode),
             pystray.MenuItem("检查更新", on_check_update),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出", on_quit),
@@ -1010,58 +1380,19 @@ def _show_update_result(app, result, silent):
             messagebox.showinfo("检查更新", f"当前已是最新版本 ({APP_VERSION})")
         return
 
-    latest_tag, exe_url, body = result
+    latest_tag, release_url, body = result
     # 截取 changelog 前几行
     lines = [l for l in body.strip().splitlines() if l.strip()]
     summary = "\n".join(lines[:10])
     if len(lines) > 10:
         summary += "\n..."
 
-    msg = f"发现新版本 {latest_tag}（当前 {APP_VERSION}）\n\n{summary}\n\n是否立即下载更新？"
+    msg = f"发现新版本 {latest_tag}（当前 {APP_VERSION}）\n\n{summary}\n\n是否打开浏览器前往下载？"
     if messagebox.askyesno("发现更新", msg):
-        _show_download_progress(app, exe_url, latest_tag)
+        import webbrowser
+        webbrowser.open(release_url)
 
 
-def _show_download_progress(app, exe_url, version):
-    """显示下载进度条窗口"""
-    win = ctk.CTkToplevel(app)
-    win.title("正在更新")
-    win.geometry("360x150")
-    win.resizable(False, False)
-    win.transient(app)
-    win.grab_set()
-
-    theme = resolve_theme(app.cfg["theme"])
-    bg = THEMES[theme]["bg"]
-    win.configure(fg_color=bg)
-
-    ctk.CTkLabel(win, text=f"正在下载 {version}...",
-                  font=ctk.CTkFont(size=14)).pack(pady=(20, 10))
-
-    progress = ctk.CTkProgressBar(win, width=300)
-    progress.pack(pady=5)
-    progress.set(0)
-
-    status_label = ctk.CTkLabel(win, text="准备下载...",
-                                 font=ctk.CTkFont(size=11))
-    status_label.pack(pady=5)
-
-    def _download():
-        try:
-            def _on_progress(downloaded, total):
-                pct = downloaded / total if total > 0 else 0
-                mb_dl = downloaded / 1048576
-                mb_total = total / 1048576
-                app.after(0, lambda: progress.set(pct))
-                app.after(0, lambda: status_label.configure(
-                    text=f"{mb_dl:.1f} / {mb_total:.1f} MB"))
-
-            download_and_install(exe_url, _on_progress)
-        except Exception as e:
-            app.after(0, lambda: messagebox.showerror("更新失败", str(e)))
-            app.after(0, win.destroy)
-
-    threading.Thread(target=_download, daemon=True).start()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1071,14 +1402,37 @@ def main():
     app = DeepSeekMeter()
 
     def on_settings_save(new_cfg):
+        old_font_size = app.cfg.get("font_size", 12)
         app.cfg = new_cfg
-        # 应用置顶
-        app.attributes("-topmost", new_cfg["topmost"])
+        # 应用置顶（窗口模式下）
+        if new_cfg.get("display_mode") == "window":
+            app.attributes("-topmost", new_cfg["topmost"])
         # 同步图钉状态
         app.pin_state = new_cfg["topmost"]
         app._update_pin_style()
-        # 应用主题
+        # 应用主题（挂件模式下不会碰 fg_color）
         app._refresh_theme()
+        # 字号变化时自动调整窗口大小
+        new_font_size = new_cfg.get("font_size", 12)
+        if new_font_size != old_font_size and new_cfg.get("display_mode") == "window":
+            scale = max(0.6, new_font_size / 12)
+            new_w = max(220, int(280 * scale))
+            new_h = max(120, int(160 * scale))
+            x = app.winfo_x()
+            y = app.winfo_y()
+            app.geometry(f"{new_w}x{new_h}+{x}+{y}")
+        # 应用显示模式
+        if new_cfg.get("display_mode") == "widget":
+            app.switch_to_widget_mode()
+        else:
+            app.switch_to_window_mode()
+        # 重新注册快捷键
+        try:
+            import keyboard
+            keyboard.unhook_all()
+        except Exception:
+            pass
+        app.setup_hotkeys()
 
     app._on_settings_save = on_settings_save
 

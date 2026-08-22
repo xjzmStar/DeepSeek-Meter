@@ -2,3 +2,4 @@
 pystray
 Pillow
 pyinstaller
+keyboard
