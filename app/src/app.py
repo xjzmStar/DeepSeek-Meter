@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "3.0.0-snapshots 2"
+APP_VERSION = "3.0.0-snapshots-3"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
