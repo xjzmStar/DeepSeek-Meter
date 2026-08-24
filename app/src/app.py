@@ -1301,8 +1301,35 @@ class SettingsWindow(ctk.CTkToplevel):
 # ═══════════════════════════════════════════════════════════
 #  系统托盘
 # ═══════════════════════════════════════════════════════════
+def _cleanup_stale_tray():
+    """清理上一次崩溃残留的托盘图标（Windows 通知区域幽灵图标）"""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class NOTIFYICONDATAW(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("hWnd", wintypes.HWND),
+                ("uID", wintypes.UINT),
+                ("uFlags", wintypes.UINT),
+            ]
+
+        NIM_DELETE = 0x00000002
+        hWnd = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
+        if hWnd:
+            nid = NOTIFYICONDATAW()
+            nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+            nid.hWnd = hWnd
+            nid.uID = 1  # pystray default ID
+            ctypes.windll.shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+    except Exception:
+        pass
+
+
 def create_tray_icon(app):
     """创建系统托盘图标"""
+    _cleanup_stale_tray()
     import pystray
     from PIL import Image, ImageDraw
 
