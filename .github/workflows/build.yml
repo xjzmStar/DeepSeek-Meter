@@ -7,7 +7,27 @@ on:
   workflow_dispatch:
 
 jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      src_dir: ${{ steps.check.outputs.src_dir }}
+      is_prerelease: ${{ steps.check.outputs.is_prerelease }}
+    steps:
+      - id: check
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if echo "$TAG" | grep -qiE '\-(snapshots?|alpha|beta|rc|dev|preview)'; then
+            echo "src_dir=app" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "$TAG -> pre-release, build from app/"
+          else
+            echo "src_dir=stable" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "$TAG -> latest, build from stable/"
+          fi
+
   build-windows:
+    needs: detect
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,19 +36,20 @@ jobs:
           python-version: '3.10'
       - name: Install dependencies
         run: |
-          cd app
+          cd ${{ needs.detect.outputs.src_dir }}
           pip install -r requirements.txt
           pip install pyinstaller
       - name: Build exe
         run: |
-          cd app
+          cd ${{ needs.detect.outputs.src_dir }}
           pyinstaller --onefile --windowed --icon=src/app.ico --add-data "src/app.ico;." --add-data "src/app_logo.png;." --name DeepSeek-Meter src/app.py
       - uses: actions/upload-artifact@v4
         with:
           name: DeepSeek-Meter-Windows
-          path: app/dist/DeepSeek-Meter.exe
+          path: ${{ needs.detect.outputs.src_dir }}/dist/DeepSeek-Meter.exe
 
   build-linux:
+    needs: detect
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,17 +58,17 @@ jobs:
           python-version: '3.10'
       - name: Install dependencies
         run: |
-          cd app
+          cd ${{ needs.detect.outputs.src_dir }}
           pip install -r requirements.txt
           pip install pyinstaller
       - name: Build binary
         run: |
-          cd app
+          cd ${{ needs.detect.outputs.src_dir }}
           pyinstaller --onefile --windowed --icon=src/app.ico --name DeepSeek-Meter src/app.py
       - uses: actions/upload-artifact@v4
         with:
           name: DeepSeek-Meter-Linux
-          path: app/dist/DeepSeek-Meter
+          path: ${{ needs.detect.outputs.src_dir }}/dist/DeepSeek-Meter
 
   build-rainmeter:
     runs-on: ubuntu-latest
@@ -61,7 +82,7 @@ jobs:
           path: DeepSeek-Meter-Rainmeter.zip
 
   release:
-    needs: [build-windows, build-linux, build-rainmeter]
+    needs: [detect, build-windows, build-linux, build-rainmeter]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -81,7 +102,6 @@ jobs:
           python3 -c "
           import re, sys
           tag = '$TAG'
-          # 统一格式：tag里的-在CHANGELOG里可能是空格，也可能是-
           tag_pattern = re.escape(tag).replace(r'\-', r'[\-\s]')
           with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
               content = f.read()
@@ -95,21 +115,10 @@ jobs:
               f.write(notes)
           print('Release notes extracted for', tag)
           "
-      - name: Check if pre-release
-        id: prerelease
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          if echo "$TAG" | grep -qiE '\-(snapshots?|alpha|beta|rc|dev|preview)'; then
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "$TAG -> pre-release"
-          else
-            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-            echo "$TAG -> latest"
-          fi
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          prerelease: ${{ needs.detect.outputs.is_prerelease }}
           files: |
             dist/DeepSeek-Meter-Windows/DeepSeek-Meter.exe
             dist/DeepSeek-Meter-Linux/DeepSeek-Meter
