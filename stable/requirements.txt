@@ -1,5 +1,6 @@
 ﻿customtkinter
 pystray
 Pillow
-keyboard
 pyinstaller
+keyboard
+plyer

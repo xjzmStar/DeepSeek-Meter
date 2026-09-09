@@ -16,9 +16,16 @@ import urllib.error
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+# ─── 系统通知（可选） ───────────────────────────────────
+try:
+    from plyer import notification as _plyer_notification
+    _HAS_PLYER = True
+except ImportError:
+    _HAS_PLYER = False
+
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "3.0.0-snapshots-3"
+APP_VERSION = "2.2.2"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -755,10 +762,22 @@ class DeepSeekMeter(ctk.CTk):
             return
         if not hasattr(self, "_last_alert") or time.time() - self._last_alert > 3600:
             self._last_alert = time.time()
+            # 弹窗提醒
             messagebox.showwarning(
                 "余额不足",
                 f"DeepSeek 余额仅剩 ¥{balance:.2f}，请及时充值！"
             )
+            # Windows 系统通知
+            if _HAS_PLYER:
+                try:
+                    _plyer_notification.notify(
+                        title="DeepSeek-Meter 余额不足",
+                        message=f"余额仅剩 ¥{balance:.2f}，请及时充值！",
+                        app_name="DeepSeek-Meter",
+                        timeout=10,
+                    )
+                except Exception:
+                    pass  # 系统通知失败不影响主流程
 
     # ── 窗口拖动 ──
     def _on_drag_start(self, event):
