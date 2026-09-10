@@ -4,7 +4,18 @@
 
 ![platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%7C%20Linux-blue) ![license](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-orange) ![©](https://img.shields.io/badge/%C2%A9-2026%20%E6%98%9F%E9%99%85%E7%BB%87%E6%A2%A6-green)
 
-## 两种方案对比
+## 功能特点
+
+- ⏰ **实时时钟** - 精确到秒的时间显示
+- 💰 **余额监控** - 自动查询 DeepSeek API 余额
+- 🌙 **峰谷时段** - 自动识别电价峰谷时段
+  - 峰段 (9:00-12:00, 14:00-18:00): 显示"梁文峰"
+  - 谷段 (其余时间): 显示"梁文谷"
+- 🎨 **精美界面** - Rainmeter 皮肤或独立悬浮窗
+- 🚀 **开机自启** - 后台静默运行
+- 🔄 **自动更新** - 检测 GitHub 新版本自动替换
+
+## 方案选择
 
 | | Rainmeter 版 | 独立应用版 |
 |---|---|---|
@@ -13,13 +24,10 @@
 | 界面 | Rainmeter 皮肤嵌入桌面 | CustomTkinter 桌面悬浮窗 |
 | 托盘 | 无 | 系统托盘图标 + 右键菜单 |
 | 跨平台 | 仅 Windows | Windows / Linux |
-| 自动更新 | 否 | ✅ 检测 GitHub 新版本自动更新 |
 
-## 方案一：Rainmeter 版（`rainmeter/`）
+## 安装
 
-基于 Rainmeter 的桌面挂件，显示实时时钟 + DeepSeek 余额 + 峰谷电价时段。
-
-### 安装
+### 方案一：Rainmeter 版
 
 1. 安装 [Rainmeter](https://www.rainmeter.net/) 4.5+ 和 Python 3.10+
 2. 将 `rainmeter/` 文件夹复制到 `%USERPROFILE%\Documents\Rainmeter\Skins\`
@@ -27,127 +35,40 @@
 4. 双击 `启动服务.vbs`
 5. 右键 Rainmeter 托盘图标 → 刷新全部 → 勾选 DeepSeek-Meter
 
-### 文件说明
+### 方案二：独立应用版
 
-| 文件 | 说明 |
-|---|---|
-| `启动服务.vbs` | 启动后台服务（无窗口） |
-| `重启服务.vbs` | 重启服务 |
-| `停止服务.bat` | 停止服务 |
-| `@Resources/config.json` | API Key 配置 |
-| `@Resources/update_state.py` | 核心：时间 + 余额 + 峰谷判断 |
-
-### 常见问题
-
-- **余额显示 NO_KEY** → 检查 `config.json` 是否配置
-- **中文乱码** → 项目使用 GBK 编码，确保系统支持中文
-- **服务没启动** → 检查启动文件夹是否有 `DeepSeek-Meter.vbs`
-
-## 方案二：独立应用版（`app/`）
-
-基于 CustomTkinter 的独立桌面应用，打包为单个 .exe，无需 Rainmeter。
-
-### 功能
-
-- 桌面悬浮窗：实时时钟 + DeepSeek 余额 + 峰谷时段
-- 系统托盘图标：右键菜单（显示/设置/检查更新/退出）
-- 明暗主题切换（dark / light / 跟随系统）
-- 窗口置顶可选
-- 低余额提醒
-- 开机自启动
-- 拖拽调窗口大小
-- **自动更新**：启动时静默检查 GitHub 新版本，发现新版自动下载替换
-
-### 安装（直接运行）
+#### 方式一：直接运行
 
 1. 安装 Python 3.10+
 2. `cd app && pip install -r requirements.txt`
 3. `python src/app.py`
 
-### 安装（打包 exe / binary）
+#### 方式二：下载 exe
 
-```bash
-# Windows
-build\build_windows.bat
+从 [Releases](https://github.com/xjzmStar/DeepSeek-Meter/releases) 页面下载预编译版本，解压即用。
 
-# Linux
-bash build/build_linux.sh
-```
+## 常见问题
 
-生成的文件：
-- Windows: `app/dist/DeepSeek-Meter.exe`
-- Linux: `app/dist/DeepSeek-Meter`
+**Q: 余额显示 NO_KEY**
+A: 需要配置 API Key，参考安装步骤中的第 3 步。
 
-或直接从 [Releases](https://github.com/xjzmStar/DeepSeek-Meter/releases) 页面下载预编译版本。
+**Q: 中文乱码**
+A: 项目使用 GBK 编码，确保系统区域设置支持中文。
 
-### 文件说明
-
-| 文件 | 说明 |
-|---|---|
-| `src/app.py` | 主程序（UI + 托盘 + API 查询 + 自动更新） |
-| `requirements.txt` | Python 依赖 |
-| `build/build_windows.bat` | Windows 打包脚本 |
-| `build/build_linux.sh` | Linux 打包脚本 |
-
-## 自动构建
-
-每次推送 `v*` tag 时，GitHub Actions 自动构建并发布：
-
-- **Windows**: `DeepSeek-Meter.exe`
-- **Linux**: `DeepSeek-Meter`
-- **Rainmeter**: `DeepSeek-Meter-Rainmeter.zip`
-
-构建产物自动附加到 GitHub Release，无需手动打包。
-
-## 项目结构
-
-```
-DeepSeek-Meter/
-├── rainmeter/              # Rainmeter 版
-│   ├── DeepSeek-Meter.ini
-│   ├── @Resources/
-│   │   ├── time.lua
-│   │   ├── update_state.py
-│   │   ├── launcher.py
-│   │   └── config.example.json
-│   ├── 启动服务.vbs
-│   ├── 重启服务.vbs
-│   └── 停止服务.bat
-├── app/                    # 独立应用版
-│   ├── src/
-│   │   └── app.py
-│   ├── build/
-│   │   ├── build_windows.bat
-│   │   └── build_linux.sh
-│   └── requirements.txt
-├── .github/workflows/      # CI 自动构建
-│   └── build.yml
-├── README.md
-└── LICENSE
-```
-
-## 技术栈
-
-- **前端 UI**: Rainmeter (Lua) / CustomTkinter (Python)
-- **后端**: Python 3.10+
-- **打包**: PyInstaller
-- **启动**: VBScript (Rainmeter 版)
-- **CI**: GitHub Actions
+**Q: Rainmeter 版服务没启动**
+A: 检查启动文件夹是否有 `DeepSeek-Meter.vbs`。
 
 ## 更新日志
 
-### v2.0.0 (2026-08-20)
+### v2.0.0
 - 新增独立应用版（CustomTkinter + PyInstaller）
 - 桌面悬浮窗 + 系统托盘 + 明暗主题 + 窗口置顶
 - 低余额提醒 + 开机自启动 + 拖拽调大小
-- 自动更新：启动时静默检查 GitHub 新版本，自动下载替换
-- 新增 Linux 版构建支持（GitHub Actions 自动打包）
-- GitHub Actions CI：tag 推送时自动构建 Windows / Linux / Rainmeter 三个版本
+- 自动更新 + Linux 版支持
 
-### v1.0.0 (2026-08-20)
+### v1.0.0
 - 初始发布：Rainmeter 版
 - 实时时钟 + DeepSeek 余额监控 + 峰谷电价时段
-- 后台静默运行 + 开机自启动
 
 ## 📄 许可证
 
