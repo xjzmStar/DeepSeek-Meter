@@ -2,6 +2,8 @@
 
 实时监控 DeepSeek API 余额的桌面工具，支持 **Rainmeter 挂件版** 和 **独立应用版** 两种方案。
 
+![platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%7C%20Linux-blue) ![license](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-orange) ![©](https://img.shields.io/badge/%C2%A9-2026%20%E6%98%9F%E9%99%85%E7%BB%87%E6%A2%A6-green)
+
 ## 两种方案对比
 
 | | Rainmeter 版 | 独立应用版 |
