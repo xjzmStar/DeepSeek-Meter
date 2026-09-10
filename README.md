@@ -153,7 +153,22 @@ py update_state.py
 
 ## 📄 许可证
 
-MIT License - 详见 [LICENSE](LICENSE)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+本项目采用 **CC BY-NC-SA 4.0** (署名-非商业性使用-相同方式共享) 许可证。
+
+**您可以：**
+- ✅ 自由查看、使用、修改和分发本项目
+- ✅ 创建衍生作品
+
+**但必须：**
+- 📌 **署名**：在使用或分发时保留原作者署名（星际织梦）
+- 📝 **相同方式共享**：修改后的衍生作品必须使用相同的 CC BY-NC-SA 4.0 许可证
+
+**禁止：**
+- ❌ **商业用途**：不得将本项目或其衍生作品用于商业盈利目的
+
+详见 [LICENSE](LICENSE) | [CC BY-NC-SA 4.0 完整条款](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode)
 
 ## 🙏 致谢
 
