@@ -1,0 +1,129 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      src_dir: ${{ steps.check.outputs.src_dir }}
+      is_prerelease: ${{ steps.check.outputs.is_prerelease }}
+    steps:
+      - id: check
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if echo "$TAG" | grep -qiE '\-(snapshots?|alpha|beta|rc|dev|preview)'; then
+            echo "src_dir=app" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "$TAG -> pre-release, build from app/"
+          else
+            echo "src_dir=stable" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "$TAG -> latest, build from stable/"
+          fi
+
+  build-windows:
+    needs: detect
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          cd ${{ needs.detect.outputs.src_dir }}
+          pip install -r requirements.txt
+          pip install pyinstaller
+      - name: Build exe
+        run: |
+          cd ${{ needs.detect.outputs.src_dir }}
+          pyinstaller --onefile --windowed --icon=src/app.ico --add-data "src/app.ico;." --add-data "src/app_logo.png;." --name DeepSeek-Meter src/app.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeepSeek-Meter-Windows
+          path: ${{ needs.detect.outputs.src_dir }}/dist/DeepSeek-Meter.exe
+
+  build-linux:
+    needs: detect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          cd ${{ needs.detect.outputs.src_dir }}
+          pip install -r requirements.txt
+          pip install pyinstaller
+      - name: Build binary
+        run: |
+          cd ${{ needs.detect.outputs.src_dir }}
+          pyinstaller --onefile --windowed --icon=src/app.ico --name DeepSeek-Meter src/app.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeepSeek-Meter-Linux
+          path: ${{ needs.detect.outputs.src_dir }}/dist/DeepSeek-Meter
+
+  build-rainmeter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip Rainmeter skin
+        run: zip -r DeepSeek-Meter-Rainmeter.zip rainmeter/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeepSeek-Meter-Rainmeter
+          path: DeepSeek-Meter-Rainmeter.zip
+
+  release:
+    needs: [detect, build-windows, build-linux, build-rainmeter]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: DeepSeek-Meter-Rainmeter
+          path: dist
+      - name: Extract changelog for current version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          python3 -c "
+          import re, sys
+          tag = '$TAG'
+          tag_pattern = re.escape(tag).replace(r'\-', r'[\-\s]')
+          with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
+              content = f.read()
+          pattern = r'## ' + tag_pattern + r'.*?(?=## v|\Z)'
+          match = re.search(pattern, content, re.DOTALL)
+          if match:
+              notes = match.group(0).strip()
+          else:
+              notes = '## ' + tag + '\n\nNo changelog entry found.'
+          with open('release_notes.md', 'w', encoding='utf-8') as f:
+              f.write(notes)
+          print('Release notes extracted for', tag)
+          "
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: ${{ needs.detect.outputs.is_prerelease }}
+          files: |
+            dist/DeepSeek-Meter-Windows/DeepSeek-Meter.exe
+            dist/DeepSeek-Meter-Linux/DeepSeek-Meter
+            dist/DeepSeek-Meter-Rainmeter.zip
+          body_path: release_notes.md
