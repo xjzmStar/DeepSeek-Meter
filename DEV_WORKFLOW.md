@@ -5,10 +5,21 @@
 ```
 DeepSeekMonitor/
 ├── app/          # 测试版（snapshots）— 日常开发在这里
+│   └── src/app_dev.py        # 测试版源码（文件名固定，见下方文件名规则）
 ├── stable/       # 正式版 — 只有发布时才从 app/ 复制过来
+│   └── src/app_stable.py     # 正式版源码（文件名固定，见下方文件名规则）
 ├── rainmeter/    # Rainmeter 版（旧版，维护模式）
 └── .github/      # CI/CD
 ```
+
+> **⚠️ 文件名规则（防呆，禁止随意改名）**
+> 两条线的源码文件名故意不同：测试版 = `app_dev.py`，正式版 = `app_stable.py`。
+> 目的是打开文件/看路径就能立刻分辨在哪条线上（同名 `app.py` 曾多次差点改错）。
+> 改名或移动文件时，必须在**同一个提交**里同步这 5 处，否则下一次 tag 构建会直接失败：
+> `app/DeepSeek-Meter.spec`、`stable/DeepSeek-Meter.spec`、`.github/workflows/build.yml`
+> （detect 步骤的 `src_file` 输出 + build-windows / build-linux 两个 `src/…` 参数）、`README.md`。
+> 两条线代码必须**逐行一致**，唯一允许的差异 = 文件头注释块 + `APP_VERSION` 常量。
+> 随手校验：`git diff --no-index app/src/app_dev.py stable/src/app_stable.py`
 
 ## 开发规则
 
