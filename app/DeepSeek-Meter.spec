@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['src/app.py'],
+    ['src/app_dev.py'],
     pathex=[],
     binaries=[],
     datas=[('src/app.ico', '.'), ('src/app_logo.png', '.')],

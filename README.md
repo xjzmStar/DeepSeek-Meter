@@ -41,7 +41,7 @@
 
 1. 安装 Python 3.10+
 2. `cd app && pip install -r requirements.txt`
-3. `python src/app.py`
+3. `python src/app_dev.py`（测试版；正式版为 `stable/src/app_stable.py`）
 
 #### 方式二：下载 exe
 

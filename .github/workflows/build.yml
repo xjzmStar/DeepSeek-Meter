@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       src_dir: ${{ steps.check.outputs.src_dir }}
+      src_file: ${{ steps.check.outputs.src_file }}
       is_prerelease: ${{ steps.check.outputs.is_prerelease }}
     steps:
       - id: check
@@ -18,12 +19,14 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           if echo "$TAG" | grep -qiE '\-(snapshots?|alpha|beta|rc|dev|preview)'; then
             echo "src_dir=app" >> "$GITHUB_OUTPUT"
+            echo "src_file=app_dev.py" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "$TAG -> pre-release, build from app/"
+            echo "$TAG -> pre-release, build app/src/app_dev.py"
           else
             echo "src_dir=stable" >> "$GITHUB_OUTPUT"
+            echo "src_file=app_stable.py" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-            echo "$TAG -> latest, build from stable/"
+            echo "$TAG -> latest, build stable/src/app_stable.py"
           fi
 
   build-windows:
@@ -42,7 +45,8 @@ jobs:
       - name: Build exe
         run: |
           cd ${{ needs.detect.outputs.src_dir }}
-          pyinstaller --onefile --windowed --icon=src/app.ico --add-data "src/app.ico;." --add-data "src/app_logo.png;." --name DeepSeek-Meter src/app.py
+          python -c "import os,sys; s='src/${{ needs.detect.outputs.src_file }}'; print('source file:', s); sys.exit(0 if os.path.exists(s) else 'SOURCE MISSING: '+s)"
+          pyinstaller --onefile --windowed --icon=src/app.ico --add-data "src/app.ico;." --add-data "src/app_logo.png;." --name DeepSeek-Meter src/${{ needs.detect.outputs.src_file }}
       - uses: actions/upload-artifact@v4
         with:
           name: DeepSeek-Meter-Windows
@@ -64,7 +68,8 @@ jobs:
       - name: Build binary
         run: |
           cd ${{ needs.detect.outputs.src_dir }}
-          pyinstaller --onefile --windowed --icon=src/app.ico --name DeepSeek-Meter src/app.py
+          python -c "import os,sys; s='src/${{ needs.detect.outputs.src_file }}'; print('source file:', s); sys.exit(0 if os.path.exists(s) else 'SOURCE MISSING: '+s)"
+          pyinstaller --onefile --windowed --icon=src/app.ico --name DeepSeek-Meter src/${{ needs.detect.outputs.src_file }}
       - uses: actions/upload-artifact@v4
         with:
           name: DeepSeek-Meter-Linux

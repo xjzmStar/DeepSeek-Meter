@@ -1,3 +1,9 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# ☆【测试版 · snapshots 线】  app/src/app_dev.py
+#     同功能的正式版文件 →  stable/src/app_stable.py
+#     两条线代码必须逐行一致，唯一允许的差异 = 本注释块 + 下方 APP_VERSION
+#     APP_VERSION 形如 3.0.0-snapshots-N；tag 形如 v3.0.0-snapshots-N → CI 构建 app/ 并标为 Pre-release
+# ══════════════════════════════════════════════════════════════════════════════
 """
 DeepSeek-Meter 独立桌面版
 实时时钟 + DeepSeek API 余额监控
@@ -25,7 +31,7 @@ except ImportError:
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.2.2"
+APP_VERSION = "3.0.0-snapshots-4"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -41,6 +47,191 @@ CONFIG_DIR = Path(os.environ.get("APPDATA", "~")) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "config.json"
 AUTO_START_PATH = Path(os.environ.get("APPDATA", "")) / \
     r"Microsoft\Windows\Start Menu\Programs\Startup" / f"{APP_NAME}.vbs"
+
+
+# ─── 日志 ────────────────────────────────────────────────
+LOG_DIR = CONFIG_DIR / "logs"
+_LOG_ENABLED = False
+_LOG_LOCK = threading.Lock()
+
+
+def _log(category: str, message: str, level: str = "INFO"):
+    """写一行日志到 %APPDATA%\\DeepSeek-Meter\\logs\\app-YYYY-MM-DD.log
+
+    日志按天一个文件，默认不自动删除；任何异常都静默忽略，绝不影响主流程。
+    """
+    if not _LOG_ENABLED:
+        return
+    try:
+        now = datetime.now()
+        line = f"{now:%Y-%m-%d %H:%M:%S} [{level}] {category} · {message}\n"
+        with _LOG_LOCK:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            with open(LOG_DIR / f"app-{now:%Y-%m-%d}.log", "a", encoding="utf-8") as f:
+                f.write(line)
+    except Exception:
+        pass
+
+
+def log_action(action: str, detail: str = ""):
+    """用户操作日志"""
+    _log("用户操作", f"{action} → {detail}" if detail else action)
+
+
+def log_system(message: str):
+    """系统/后台日志"""
+    _log("系统", message)
+
+
+def init_logging(enabled: bool):
+    """初始化日志（启动时调用一次）"""
+    global _LOG_ENABLED
+    _LOG_ENABLED = bool(enabled)
+    log_system(f"应用启动 v{APP_VERSION}（日志{'已启用' if _LOG_ENABLED else '已关闭'}）")
+
+
+# ─── 法定节假日数据 ──────────────────────────────────────
+HOLIDAY_DIR = CONFIG_DIR / "holiday"
+HOLIDAY_SOURCES = [
+    "https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/{year}.json",
+    "https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/{year}.json",
+    "https://api.jiejiariapi.com/v1/holidays/{year}",
+]
+
+# 内置兜底表（国务院办公厅放假安排），离线或拉取失败时使用
+BUILTIN_HOLIDAYS = {
+    2025: {
+        "2025-01-01": "元旦",
+        "2025-01-28": "除夕", "2025-01-29": "春节", "2025-01-30": "春节",
+        "2025-01-31": "春节", "2025-02-01": "春节", "2025-02-02": "春节",
+        "2025-02-03": "春节", "2025-02-04": "春节",
+        "2025-04-04": "清明节", "2025-04-05": "清明节", "2025-04-06": "清明节",
+        "2025-05-01": "劳动节", "2025-05-02": "劳动节", "2025-05-03": "劳动节",
+        "2025-05-04": "劳动节", "2025-05-05": "劳动节",
+        "2025-05-31": "端午节", "2025-06-01": "端午节", "2025-06-02": "端午节",
+        "2025-10-01": "国庆节", "2025-10-02": "国庆节", "2025-10-03": "国庆节",
+        "2025-10-04": "国庆节", "2025-10-05": "国庆节", "2025-10-06": "国庆节",
+        "2025-10-07": "国庆节", "2025-10-08": "国庆节",
+    },
+    2026: {
+        "2026-01-01": "元旦", "2026-01-02": "元旦", "2026-01-03": "元旦",
+        "2026-02-15": "春节", "2026-02-16": "除夕", "2026-02-17": "春节",
+        "2026-02-18": "春节", "2026-02-19": "春节", "2026-02-20": "春节",
+        "2026-02-21": "春节", "2026-02-22": "春节", "2026-02-23": "春节",
+        "2026-04-04": "清明节", "2026-04-05": "清明节", "2026-04-06": "清明节",
+        "2026-05-01": "劳动节", "2026-05-02": "劳动节", "2026-05-03": "劳动节",
+        "2026-05-04": "劳动节", "2026-05-05": "劳动节",
+        "2026-06-19": "端午节", "2026-06-20": "端午节", "2026-06-21": "端午节",
+        "2026-09-25": "中秋节", "2026-09-26": "中秋节", "2026-09-27": "中秋节",
+        "2026-10-01": "国庆节", "2026-10-02": "国庆节", "2026-10-03": "国庆节",
+        "2026-10-04": "国庆节", "2026-10-05": "国庆节", "2026-10-06": "国庆节",
+        "2026-10-07": "国庆节",
+    },
+}
+
+_HOLIDAYS = {}  # {"2026-10-01": "国庆节"}，仅含放假日
+_HOLIDAY_LOCK = threading.Lock()
+
+
+def _parse_holiday_payload(data):
+    """把各数据源返回统一成 {"YYYY-MM-DD": "节日名"}（只保留放假日）"""
+    days = {}
+    try:
+        if isinstance(data, dict) and isinstance(data.get("days"), list):
+            # holiday-cn 格式：{"days": [{"name","date","isOffDay"}, ...]}
+            for item in data["days"]:
+                if isinstance(item, dict) and item.get("isOffDay") and item.get("date"):
+                    days[item["date"]] = item.get("name") or "法定节假日"
+        elif isinstance(data, dict):
+            # jiejiariapi 格式：{"2026-01-01": {"date","name","isOffDay"}, ...}
+            for item in data.values():
+                if isinstance(item, dict) and item.get("isOffDay") and item.get("date"):
+                    days[item["date"]] = item.get("name") or "法定节假日"
+    except Exception:
+        return {}
+    return days
+
+
+def _load_holiday_cache(year):
+    """读取本地缓存 %APPDATA%\\DeepSeek-Meter\\holiday\\{year}.json"""
+    path = HOLIDAY_DIR / f"{year}.json"
+    if not path.exists():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return _parse_holiday_payload(json.load(f))
+    except Exception:
+        return {}
+
+
+def _ensure_holidays(year):
+    """确保某年节假日数据在内存（本地缓存 → 内置兜底表）"""
+    with _HOLIDAY_LOCK:
+        if year in _HOLIDAYS:
+            return _HOLIDAYS[year]
+    days = _load_holiday_cache(year) or dict(BUILTIN_HOLIDAYS.get(year, {}))
+    with _HOLIDAY_LOCK:
+        _HOLIDAYS[year] = days
+    return days
+
+
+def get_holiday_name(dt=None):
+    """返回该日期的法定节日名；非放假日返回 None"""
+    d = dt or datetime.now()
+    key = d.date().isoformat() if hasattr(d, "date") else str(d)[:10]
+    try:
+        return _ensure_holidays(int(key[:4])).get(key)
+    except Exception:
+        return None
+
+
+def refresh_holidays(force=False):
+    """后台刷新节假日数据：在线拉取 → 写缓存；失败则保留缓存/内置表
+
+    缓存 7 天内不重复拉取；每年 11 月起顺带预热下一年（元旦跨年）。
+    """
+    now = datetime.now()
+    years = [now.year]
+    if now.month >= 11:
+        years.append(now.year + 1)
+    for year in years:
+        path = HOLIDAY_DIR / f"{year}.json"
+        if not force and path.exists():
+            try:
+                if time.time() - path.stat().st_mtime < 7 * 86400:
+                    _ensure_holidays(year)
+                    continue
+            except Exception:
+                pass
+        payload = None
+        for tpl in HOLIDAY_SOURCES:
+            try:
+                req = urllib.request.Request(
+                    tpl.format(year=year),
+                    headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"},
+                )
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                if _parse_holiday_payload(data):
+                    payload = data
+                    break
+            except Exception:
+                continue
+        if payload is None:
+            log_system(f"节假日在线数据获取失败，使用本地缓存/内置表（{year}）")
+            _ensure_holidays(year)
+            continue
+        try:
+            HOLIDAY_DIR.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+        except Exception:
+            pass
+        with _HOLIDAY_LOCK:
+            _HOLIDAYS.pop(year, None)
+        _ensure_holidays(year)
+        log_system(f"节假日数据已更新（{year}）")
+
 
 # ─── 主题配色 ────────────────────────────────────────────
 THEMES = {
@@ -93,6 +284,7 @@ DEFAULT_CONFIG = {
     "auto_start": True,
     "low_balance_alert": True,
     "low_balance_threshold": 2.0,
+    "log_enabled": True,  # 记录操作日志到 %APPDATA%\DeepSeek-Meter\logs
     "topmost": True,
     "theme": "dark",  # "dark" / "light" / "system"
     "window_x": None,
@@ -205,14 +397,24 @@ def fetch_balance(api_key: str):
 
 
 # ─── 峰谷判断 ────────────────────────────────────────────
-def get_peak_valley():
-    """返回当前时段的显示文本和颜色（2026-08-23起周末全天低谷）"""
-    now = datetime.now()
-    hour = now.hour
+def get_peak_valley(dt=None):
+    """返回某时刻的峰谷显示文本和颜色（默认当前时刻）
+
+    按 DeepSeek 官方口径：
+      · 周六/周日（含调休补班的周末）全天低谷 →  梁文谷
+      · 国家法定节假日全天低谷 → 梁文谷·节日名
+      · 其余周一至周五 9:00-12:00 / 14:00-18:00 为高峰 → 梁文峰
+    """
+    now = dt or datetime.now()
     # 周末全天低谷（周六=5, 周日=6）
     if now.weekday() in (5, 6):
         return "梁文谷", "#00A050"
+    # 法定节假日全天低谷（附带节日名彩蛋）
+    holiday = get_holiday_name(now)
+    if holiday:
+        return f"梁文谷·{holiday}", "#00A050"
     # 峰段: 9:00-12:00, 14:00-18:00
+    hour = now.hour
     is_peak = (9 <= hour < 12) or (14 <= hour < 18)
     if is_peak:
         return "梁文峰", "#C83232"  # 红
@@ -290,6 +492,10 @@ class DeepSeekMeter(ctk.CTk):
         super().__init__()
 
         self.cfg = load_config()
+        # ── 日志 ──
+        init_logging(self.cfg.get("log_enabled", True))
+        log_system(f"启动时峰谷状态：{get_peak_valley()[0]}")
+        log_action("程序启动")
         self.balance = None
         self.balance_status = ""
         self.running = True
@@ -336,6 +542,9 @@ class DeepSeekMeter(ctk.CTk):
         self._clock_after_id = None
         self._update_clock()
         self._start_balance_thread()
+
+        # ── 节假日数据（后台异步拉取，不阻塞启动） ──
+        threading.Thread(target=refresh_holidays, daemon=True).start()
 
         # ── 全局快捷键 ──
         self.setup_hotkeys()
@@ -388,6 +597,7 @@ class DeepSeekMeter(ctk.CTk):
     def switch_to_widget_mode(self):
         """切换到挂件模式：无标题栏、半透明、可穿透"""
         self.cfg["display_mode"] = "widget"
+        log_action("切换显示模式", "挂件模式")
         self._save_position()
         # 保存窗口模式下的位置
         self._window_mode_x = self.winfo_x()
@@ -423,6 +633,7 @@ class DeepSeekMeter(ctk.CTk):
     def switch_to_window_mode(self):
         """切换回窗口模式"""
         self.cfg["display_mode"] = "window"
+        log_action("切换显示模式", "窗口模式")
         # 恢复系统 Snap
         self._set_snap(True)
         # 取消鼠标穿透
@@ -549,19 +760,24 @@ class DeepSeekMeter(ctk.CTk):
         """快捷键：显示/隐藏"""
         if self.winfo_viewable():
             self.withdraw()
+            log_action("快捷键", "显示/隐藏 → 已隐藏")
         else:
             self._on_show()
+            log_action("快捷键", "显示/隐藏 → 已显示")
 
     def _hotkey_open_settings(self):
         """快捷键：打开设置"""
+        log_action("快捷键", "打开设置")
         self.after(0, self._open_settings)
 
     def _hotkey_toggle_mode(self):
         """快捷键：切换窗口/挂件模式"""
+        log_action("快捷键", "切换显示模式")
         self.after(0, self._toggle_display_mode)
 
     def _hotkey_quit(self):
         """快捷键：退出"""
+        log_action("快捷键", "退出程序")
         self.after(0, self._force_quit)
 
     def _toggle_display_mode(self):
@@ -578,13 +794,16 @@ class DeepSeekMeter(ctk.CTk):
         if self._settings_win and self._settings_win.winfo_exists():
             self._settings_win.lift()
             self._settings_win.focus_force()
+            log_action("打开设置面板", "已存在，前置窗口")
             return
+        log_action("打开设置面板")
         self._opening_settings = True
         self._settings_win = SettingsWindow(self, self.cfg, self._on_settings_save)
         self._opening_settings = False
 
     def _force_quit(self):
         """强制退出程序"""
+        log_action("程序退出")
         self.running = False
         self._set_snap(True)  # 恢复系统 Snap
         try:
@@ -708,6 +927,7 @@ class DeepSeekMeter(ctk.CTk):
         self.attributes("-topmost", self.pin_state)
         self._update_pin_style()
         save_config(self.cfg)
+        log_action("窗口置顶", "开启" if self.pin_state else "关闭")
 
     def _update_pin_style(self):
         """更新图钉按钮样式"""
@@ -756,12 +976,14 @@ class DeepSeekMeter(ctk.CTk):
                 self.after(0, self._low_balance_notify, balance)
         else:
             self.balance_label.configure(text="¥查询失败", text_color="#FF4444")
+            log_system(f"余额查询失败：{status}")
 
     def _low_balance_notify(self, balance):
         if not self.running:
             return
         if not hasattr(self, "_last_alert") or time.time() - self._last_alert > 3600:
             self._last_alert = time.time()
+            log_system(f"低余额提醒：¥{balance:.2f}")
             # 弹窗提醒
             messagebox.showwarning(
                 "余额不足",
@@ -802,6 +1024,7 @@ class DeepSeekMeter(ctk.CTk):
         y = self.winfo_y()
         w = self.winfo_width()
         h = self.winfo_height()
+        old_pos = (self.cfg.get("window_x"), self.cfg.get("window_y"))
         # 防护：窗口尺寸/位置明显异常时不保存（防止 Snap 吸附导致脏数据）
         # 使用虚拟屏幕尺寸（包含所有显示器）而非仅主屏
         try:
@@ -828,6 +1051,8 @@ class DeepSeekMeter(ctk.CTk):
         self.cfg["window_w"] = w
         self.cfg["window_h"] = h
         save_config(self.cfg)
+        if (x, y) != old_pos:
+            log_action("窗口位置", f"{x},{y}（{w}x{h}）")
 
     def _on_map(self, event=None):
         """窗口从隐藏恢复时，同步显示设置窗口"""
@@ -849,10 +1074,12 @@ class DeepSeekMeter(ctk.CTk):
     def _on_close(self):
         self._save_position()
         self.withdraw()  # 隐藏到托盘，不设 running=False
+        log_action("窗口", "最小化到托盘")
 
     def _on_show(self):
         """从托盘恢复显示时重启时钟"""
         self.deiconify()
+        log_action("窗口", "恢复显示")
         # 取消旧的定时器再重启，避免重复
         if self._clock_after_id:
             self.after_cancel(self._clock_after_id)
@@ -1220,6 +1447,13 @@ class SettingsWindow(ctk.CTkToplevel):
                        fg_color="#555", hover_color="#666",
                        command=self._cancel).pack(side="left", padx=10)
 
+        # 打开日志文件夹
+        log_row = ctk.CTkFrame(self._scroll, fg_color="transparent")
+        log_row.pack(pady=(0, 12))
+        ctk.CTkButton(log_row, text="📂 打开日志文件夹", width=300, height=32,
+                       font=ctk.CTkFont(size=13),
+                       command=self._open_log_folder).pack()
+
         # 布局完成后再显示，防止闪烁
         self.update_idletasks()
         self.deiconify()
@@ -1269,8 +1503,51 @@ class SettingsWindow(ctk.CTkToplevel):
         else:
             self.font_preview.configure(font=ctk.CTkFont(size=size))
 
+    def _log_changes(self, old_cfg):
+        """字段级记录设置变更（API Key 只记是否变更，绝不明文记录）"""
+        fields = [
+            ("api_key", "API Key"),
+            ("auto_start", "开机自启"),
+            ("low_balance_alert", "低余额提醒"),
+            ("low_balance_threshold", "提醒阈值"),
+            ("topmost", "窗口置顶"),
+            ("theme", "主题"),
+            ("font_family", "字体"),
+            ("font_size", "字号"),
+            ("display_mode", "显示模式"),
+            ("widget_opacity", "挂件透明度"),
+            ("widget_position", "挂件位置"),
+            ("mouse_passthrough", "鼠标穿透"),
+            ("widget_time_color", "挂件时间颜色"),
+            ("widget_date_color", "挂件日期颜色"),
+            ("log_enabled", "日志开关"),
+        ]
+        changes = []
+        for key, label in fields:
+            new_val = self.cfg.get(key)
+            if new_val == old_cfg.get(key):
+                continue
+            if key == "api_key":
+                changes.append("API Key → 已更新" if new_val else "API Key → 已清空")
+            else:
+                changes.append(f"{label} → {new_val}")
+        if self.cfg.get("hotkeys") != old_cfg.get("hotkeys"):
+            hk = self.cfg.get("hotkeys") or {}
+            changes.append("快捷键 → " + ", ".join(f"{k}:{v}" for k, v in hk.items()))
+        _log("用户操作", "设置保存 · " + ("；".join(changes) if changes else "无变更"))
+
+    def _open_log_folder(self):
+        """打开日志文件夹"""
+        try:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(LOG_DIR))
+            log_action("设置", "打开日志文件夹")
+        except Exception as e:
+            messagebox.showerror("打开失败", f"无法打开日志文件夹：\n{LOG_DIR}\n\n{e}")
+
     def _confirm(self):
         """确认：应用所有设置并保存"""
+        old_cfg = dict(self.cfg)
         self.cfg["api_key"] = self.api_entry.get().strip()
         self.cfg["auto_start"] = self.autostart_var.get()
         self.cfg["low_balance_alert"] = self.alert_var.get()
@@ -1298,6 +1575,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 hotkeys[key] = val
         if hotkeys:
             self.cfg["hotkeys"] = hotkeys
+        self._log_changes(old_cfg)
         save_config(self.cfg)
         set_auto_start(self.cfg["auto_start"])
         self.on_save(self.cfg)
@@ -1306,6 +1584,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _cancel(self):
         """取消：恢复原始设置"""
+        _log("用户操作", "设置取消（未保存）")
         self.on_save(self.original_cfg)
         self._clear_ref()
         self.destroy()
@@ -1365,13 +1644,16 @@ def create_tray_icon(app):
         return img
 
     def on_show(icon, item):
+        log_action("托盘", "显示窗口")
         app.after(0, app._on_show)
 
     def on_check_update(icon, item):
+        log_action("托盘", "检查更新")
         app.after(0, lambda: _do_update_check(app))
 
     def on_settings(icon, item):
         def open_settings():
+            log_action("托盘", "打开设置")
             if app._opening_settings:
                 return
             if app._settings_win and app._settings_win.winfo_exists():
@@ -1384,11 +1666,13 @@ def create_tray_icon(app):
         app.after(0, open_settings)
 
     def on_quit(icon, item):
+        log_action("托盘", "退出程序")
         app.running = False
         app.after(0, app.destroy)
         icon.stop()
 
     def on_toggle_mode(icon, item):
+        log_action("托盘", "切换显示模式")
         app.after(0, app._toggle_display_mode)
 
     icon = pystray.Icon(
@@ -1422,11 +1706,13 @@ def _do_update_check(app, silent=False):
 def _show_update_result(app, result, silent):
     """显示更新检查结果"""
     if result is None:
+        log_system(f"检查更新：已是最新版本（{APP_VERSION}）")
         if not silent:
             messagebox.showinfo("检查更新", f"当前已是最新版本 ({APP_VERSION})")
         return
 
     latest_tag, release_url, body = result
+    log_system(f"检查更新：发现新版本 {latest_tag}（当前 {APP_VERSION}）")
     # 截取 changelog 前几行
     lines = [l for l in body.strip().splitlines() if l.strip()]
     summary = "\n".join(lines[:10])
