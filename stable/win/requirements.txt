@@ -1,0 +1,6 @@
+﻿customtkinter
+pystray
+Pillow
+keyboard
+plyer
+pyinstaller

@@ -25,7 +25,7 @@ except ImportError:
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.2.2"
+APP_VERSION = "2.3.0"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 

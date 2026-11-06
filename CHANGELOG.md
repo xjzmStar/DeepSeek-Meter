@@ -1,5 +1,55 @@
 # 更新日志
 
+## v3.1.0-snapshots-1 (2026-11-06)
+### 新增
+- **Linux 平台支持**
+  - 目录结构重构：`app/win/`、`app/linux/`、`stable/win/`、`stable/linux/` 四分区
+  - 自包含安装器：`sudo ./DeepSeek-Meter-Linux-Installer.sh` 一键安装
+### 改进
+1. **跨平台路径配置**
+   - Linux: `~/.config/DeepSeek-Meter/`
+   - Windows: `%APPDATA%/DeepSeek-Meter/`
+2. **字体列表**
+   - Linux常用字体：Noto Sans CJK SC、WenQuanYi Micro Hei等
+3. **主题检测**
+   - Linux: 使用 `gsettings` 读取GNOME/COSMIC主题
+   - Windows: 使用 `winreg` 读取注册表
+4. **开机自启**
+   - Linux: `.desktop` 文件 → `~/.config/autostart/`
+   - Windows: VBS脚本 → 启动文件夹
+5. **窗口置顶**
+   - Linux: 使用 `xprop` 强制设置 `_NET_WM_STATE_ABOVE`
+   - 添加了 `_start_topmost_keeper()` 和 `_stop_topmost_keeper()` 方法
+   - 初始化时自动启动置顶保持器
+6. **系统托盘优雅降级**
+   - 托盘创建失败时不崩溃
+   - 无托盘时关闭窗口直接退出（而不是隐藏）
+
+## v2.3.0 (2026-11-06)
+### 新增
+- **Linux 平台支持**
+  - 目录结构重构：`app/win/`、`app/linux/`、`stable/win/`、`stable/linux/` 四分区
+  - 自包含安装器：`sudo ./DeepSeek-Meter-Linux-Installer.sh` 一键安装
+### 改进
+1. **跨平台路径配置**
+   - Linux: `~/.config/DeepSeek-Meter/`
+   - Windows: `%APPDATA%/DeepSeek-Meter/`
+2. **字体列表**
+   - Linux常用字体：Noto Sans CJK SC、WenQuanYi Micro Hei等
+3. **主题检测**
+   - Linux: 使用 `gsettings` 读取GNOME/COSMIC主题
+   - Windows: 使用 `winreg` 读取注册表
+4. **开机自启**
+   - Linux: `.desktop` 文件 → `~/.config/autostart/`
+   - Windows: VBS脚本 → 启动文件夹
+5. **窗口置顶**
+   - Linux: 使用 `xprop` 强制设置 `_NET_WM_STATE_ABOVE`
+   - 添加了 `_start_topmost_keeper()` 和 `_stop_topmost_keeper()` 方法
+   - 初始化时自动启动置顶保持器
+6. **系统托盘优雅降级**
+   - 托盘创建失败时不崩溃
+   - 无托盘时关闭窗口直接退出（而不是隐藏）
+
 ## v2.2.2 (2026-09-09)
 ### 新增
 - 余额不足时同时弹窗 + Windows 系统通知（toast），确保提醒不被忽略

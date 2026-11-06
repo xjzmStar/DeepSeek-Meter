@@ -2,16 +2,13 @@
 
 实时监控 DeepSeek API 余额的桌面工具，支持 **Rainmeter 挂件版** 和 **独立应用版** 两种方案。
 
-## 两种方案对比
+## 三个版本
 
-| | Rainmeter 版 | 独立应用版 |
-|---|---|---|
-| 依赖 | Rainmeter + Python | 无需额外依赖（单 exe） |
-| 大小 | ~50KB | ~17MB |
-| 界面 | Rainmeter 皮肤嵌入桌面 | CustomTkinter 桌面悬浮窗 |
-| 托盘 | 无 | 系统托盘图标 + 右键菜单 |
-| 跨平台 | 仅 Windows | Windows / Linux |
-| 自动更新 | 否 | ✅ 检测 GitHub 新版本自动更新 |
+| 版本 | 平台 | 目录 | 说明 |
+|---|---|---|---|
+| **Rainmeter 版** | Windows | `rainmeter/` | 基于 Rainmeter 的桌面挂件 |
+| **独立应用版 (Windows)** | Windows | `app/win/` 或 `stable/win/` | CustomTkinter 桌面悬浮窗，打包为 exe |
+| **独立应用版 (Linux)** | Linux | `app/linux/` 或 `stable/linux/` | CustomTkinter 桌面悬浮窗，Python 脚本运行 |
 
 ## 方案一：Rainmeter 版（`rainmeter/`）
 
@@ -41,7 +38,7 @@
 - **中文乱码** → 项目使用 GBK 编码，确保系统支持中文
 - **服务没启动** → 检查启动文件夹是否有 `DeepSeek-Meter.vbs`
 
-## 方案二：独立应用版（`app/`）
+## 方案二：独立应用版 - Windows（`app/win/` 或 `stable/win/`）
 
 基于 CustomTkinter 的独立桌面应用，打包为单个 .exe，无需 Rainmeter。
 
@@ -51,88 +48,85 @@
 - 系统托盘图标：右键菜单（显示/设置/检查更新/退出）
 - 明暗主题切换（dark / light / 跟随系统）
 - 窗口置顶可选
-- 低余额提醒
+- 低余额提醒（弹窗 + 系统通知）
 - 开机自启动
 - 拖拽调窗口大小
 - **自动更新**：启动时静默检查 GitHub 新版本，发现新版自动下载替换
 
-### 安装（直接运行）
+### 安装
 
-1. 安装 Python 3.10+
-2. `cd app && pip install -r requirements.txt`
-3. `python src/app.py`
-
-### 安装（打包 exe / binary）
-
-```bash
-# Windows
-build\build_windows.bat
-
-# Linux
-bash build/build_linux.sh
-```
-
-生成的文件：
-- Windows: `app/dist/DeepSeek-Meter.exe`
-- Linux: `app/dist/DeepSeek-Meter`
-
-或直接从 [Releases](https://github.com/xjzmStar/DeepSeek-Meter/releases) 页面下载预编译版本。
+从 [Releases](https://github.com/xjzmStar/DeepSeek-Meter/releases) 页面下载 `DeepSeek-Meter.exe`，双击运行即可。
 
 ### 文件说明
 
 | 文件 | 说明 |
 |---|---|
-| `src/app.py` | 主程序（UI + 托盘 + API 查询 + 自动更新） |
+| `src/app_dev.py` | 测试版主程序 |
+| `src/app_stable.py` | 正式版主程序 |
 | `requirements.txt` | Python 依赖 |
-| `build/build_windows.bat` | Windows 打包脚本 |
-| `build/build_linux.sh` | Linux 打包脚本 |
 
-## 自动构建
+## 方案三：独立应用版 - Linux（`app/linux/` 或 `stable/linux/`）
 
-每次推送 `v*` tag 时，GitHub Actions 自动构建并发布：
+基于 CustomTkinter 的独立桌面应用，使用 Python 脚本运行。
 
-- **Windows**: `DeepSeek-Meter.exe`
-- **Linux**: `DeepSeek-Meter`
-- **Rainmeter**: `DeepSeek-Meter-Rainmeter.zip`
+### 功能
 
-构建产物自动附加到 GitHub Release，无需手动打包。
+- 桌面悬浮窗：实时时钟 + DeepSeek 余额 + 峰谷时段
+- 系统托盘图标：右键菜单（显示/设置/检查更新/退出）
+- 明暗主题切换（dark / light / 跟随系统）
+- 窗口置顶可选（使用 xprop 强制设置）
+- 低余额提醒（弹窗 + 系统通知）
+- 开机自启动（.desktop 文件）
+- 拖拽调窗口大小
 
-## 项目结构
+### 安装
 
-```
-DeepSeek-Meter/
-├── rainmeter/              # Rainmeter 版
-│   ├── DeepSeek-Meter.ini
-│   ├── @Resources/
-│   │   ├── time.lua
-│   │   ├── update_state.py
-│   │   ├── launcher.py
-│   │   └── config.example.json
-│   ├── 启动服务.vbs
-│   ├── 重启服务.vbs
-│   └── 停止服务.bat
-├── app/                    # 独立应用版
-│   ├── src/
-│   │   └── app.py
-│   ├── build/
-│   │   ├── build_windows.bat
-│   │   └── build_linux.sh
-│   └── requirements.txt
-├── .github/workflows/      # CI 自动构建
-│   └── build.yml
-├── README.md
-└── LICENSE
+1. 从 [Releases](https://github.com/xjzmStar/DeepSeek-Meter/releases) 页面下载 `DeepSeek-Meter-Linux-Installer.sh`
+2. 运行安装命令：
+   ```bash
+   sudo chmod +x DeepSeek-Meter-Linux-Installer.sh
+   sudo ./DeepSeek-Meter-Linux-Installer.sh
+   ```
+3. 安装完成后，可以通过以下方式启动：
+   - 终端运行：`deepseek-meter`
+   - 应用菜单搜索：DeepSeek-Meter
+
+### 卸载
+
+```bash
+sudo ./DeepSeek-Meter-Linux-Installer.sh --uninstall
 ```
 
-## 技术栈
+### 安装器特性
 
-- **前端 UI**: Rainmeter (Lua) / CustomTkinter (Python)
-- **后端**: Python 3.10+
-- **打包**: PyInstaller
-- **启动**: VBScript (Rainmeter 版)
-- **CI**: GitHub Actions
+- ✅ 自动检测包管理器（apt/dnf/yum/pacman/zypper）
+- ✅ 自动安装系统依赖（python3-tk、xdotool、x11-utils）
+- ✅ 自动创建虚拟环境并安装 Python 依赖
+- ✅ 自动创建桌面快捷方式和启动命令
+- ✅ 支持中英文界面
+- ✅ 支持卸载
+
+### 文件说明
+
+| 文件 | 说明 |
+|---|---|
+| `install.sh` | 安装脚本（自包含，附带源码） |
+| `build_installer.sh` | 打包脚本（开发用） |
+| `src/app_linux_dev.py` | 测试版主程序 |
+| `src/app_linux_stable.py` | 正式版主程序 |
+| `requirements.txt` | Python 依赖 |
 
 ## 更新日志
+
+### v3.0.0 (测试版)
+> ⚠️ **目前该版本为测试状态，出现任何问题请立即关闭程序进程并在GitHub提交issue**
+
+- **挂件模式**（核心功能）
+  - 无标题栏、半透明显示（30%~100% 可调）
+  - 四角定位（左上/右上/左下/右下）
+  - 鼠标穿透（可选）
+  - 双击挂件回到窗口模式
+  - 挂件字体颜色自定义（时间/日期分别选色）
 
 ### v2.0.0 (2026-08-20)
 - 新增独立应用版（CustomTkinter + PyInstaller）
