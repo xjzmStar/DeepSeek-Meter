@@ -18,7 +18,7 @@ from pathlib import Path
 
 # ─── 常量 ───────────────────────────────────────────────
 APP_NAME = "DeepSeek-Meter"
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.2.1"
 GITHUB_REPO = "xjzmStar/DeepSeek-Meter"
 
 
@@ -303,11 +303,11 @@ class DeepSeekMeter(ctk.CTk):
         except Exception:
             pass
 
-        # 恢复窗口位置和大小（多屏位置保存）
+        # 恢复窗口位置，大小始终按字号计算
         if self.cfg["window_x"] is not None:
-            w = self.cfg.get("window_w", init_w)
-            h = self.cfg.get("window_h", init_h)
-            self.geometry(f"{w}x{h}+{self.cfg['window_x']}+{self.cfg['window_y']}")
+            self.geometry(f"{init_w}x{init_h}+{self.cfg['window_x']}+{self.cfg['window_y']}")
+        else:
+            self.geometry(f"{init_w}x{init_h}")
 
         # 记录窗口位置（拖拽 + 松手都保存，支持多屏坐标）
         self.bind("<ButtonPress-1>", self._on_drag_start)
